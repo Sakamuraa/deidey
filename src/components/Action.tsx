@@ -1,7 +1,7 @@
 import type { AnchorHTMLAttributes, ButtonHTMLAttributes, ReactNode } from "react";
 
 type Variant = "primary" | "quiet" | "link";
-type Size = "md" | "lg";
+type Size = "md" | "lg" | "icon";
 
 const BASE =
   "inline-flex items-center justify-center gap-2 font-medium whitespace-nowrap " +
@@ -25,6 +25,17 @@ const VARIANTS: Record<Variant, string> = {
 const SIZES: Record<Size, string> = {
   md: "h-11 px-5 text-sm",
   lg: "h-13 px-7 text-base",
+  /**
+   * Square icon-only button. Exists as a first-class size on purpose.
+   *
+   * The previous version passed `className="size-10 px-0"` to override the
+   * padding of `md`. That does not work: `px-0` and `px-5` have identical
+   * specificity, so the winner is whichever Tailwind emits later in the
+   * stylesheet, not whichever appears later in the class attribute. The
+   * padding stayed at 20px, the content box collapsed to 0, and every icon
+   * inside the button shrank to zero width and rendered as an empty box.
+   */
+  icon: "size-11 shrink-0 p-0",
 };
 
 type CommonProps = {

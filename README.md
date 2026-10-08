@@ -31,17 +31,33 @@ X hanya bisa dibaca lewat `og:` meta tag, jadi yang terambil adalah nama,
 handle, bio, dan avatar. Jumlah pengikut tidak bisa diambil tanpa login, jadi
 tidak ditampilkan.
 
+## URL produksi
+
+```
+https://mizuhamzazu.vtube-info.xyz
+```
+
+Subdomain sendiri, bukan sub-path, jadi Vite `base` tetap `"/"` dan semua
+referensi aset boleh `/media/...`.
+
+Nilai ini ada di empat tempat dan harus konsisten:
+
+```
+src/content/site.ts      site.url
+index.html               canonical, og:url, og:image, twitter:image, JSON-LD
+public/robots.txt        baris Sitemap
+public/sitemap.xml       <loc>
+```
+
+Kalau domainnya pindah, ganti keempatnya. Untuk aset, jangan tulis `/media/...`
+di JSX secara langsung, pakai `asset()` dari `src/lib/paths.ts`.
+
 ## Mengganti konten
 
 Semua string ada di satu file: `src/content/site.ts`.
 
-Sebelum publish:
-
-1. **`site.url`** - domain produksi. Dipakai canonical, OG, dan sitemap.
-   Nilai `.example` ini juga ada di `index.html`, `public/robots.txt`,
-   `public/sitemap.xml`.
-2. **`site.bio`** dan **`site.credits`** - kalau deskripsi channel berubah.
-3. **`uploads.items`** - ganti dengan isi feed terbaru. Jumlahnya bebas;
+1. **`site.bio`** dan **`site.credits`** - kalau deskripsi channel berubah.
+2. **`uploads.items`** - ganti dengan isi feed terbaru. Jumlahnya bebas;
    layout menanganinya sendiri.
 
 ## Isi halaman
@@ -120,14 +136,29 @@ Chrome headless terhadap `npm run preview`:
 - 8 tautan upload ke `youtube.com/watch?v=<11 char>` yang valid.
 - Form: 0. Tautan `mailto:`: 0.
 - Tanpa error console di ketiga lebar.
+- Canonical, `og:url`, `og:image`, `twitter:image`, JSON-LD `url` dan `image`
+  semuanya menunjuk ke `https://mizuhamzazu.vtube-info.xyz`.
+- HTML hasil build tidak bocor URL absolut ke domain lain; semua referensi
+  aset lokal.
 - Kontras: 15 pasangan token per tema, semua lolos. Terendah 4.55:1 di terang
   dan 7.66:1 di gelap.
 - Tap target >= 24px, outline fokus 2px solid, skip link bisa difokus.
+- Ikon SVG di nav lebarnya 18px, bukan 0. Yang pernah nol karena `px-0` dan
+  `px-5` specificity-nya sama, jadi `className` tidak bisa menimpa padding
+  preset `size`. Karena itu tombol ikon sekarang punya size `icon` sendiri.
 - `prefers-reduced-motion`: 0 blok tertinggal opacity 0.
 - Core Web Vitals, 4G (150ms RTT, 1.6 Mbps), cold cache, viewport 390px,
-  5 run: LCP median 1720ms / maks 1732ms, CLS 0, load median 872ms.
+  5 run: LCP median 1868ms / maks 2008ms, CLS 0. LCP element adalah avatar.
 
 Belum diverifikasi: skor Lighthouse CLI, dan performa di jaringan asli.
+
+## Berat aset
+
+Avatar asli dari `yt3` aslinya 133 kB dan ada di jalur kritis, jadi dua avatar
+di-encode ulang ke WebP lewat canvas (51 kB dan 21 kB). `apple-touch-icon`
+tetap PNG 180x180 karena iOS mengabaikan WebP untuk touch icon dan akan
+memakai screenshot sebagai gantinya. Upload thumbnail dibiarkan JPEG: lazy
+loaded, bukan di jalur kritis.
 
 ## Deploy
 
@@ -136,6 +167,10 @@ Build static ke `dist/`. Tanpa server-side, tanpa env var.
 **Vercel** - import `Sakamuraa/mizu-hamzazu`, Vite terdeteksi otomatis.
 Build command `npm run build`, output `dist`. Publish ke `main` akan
 auto-deploy.
+
+Lalu di Settings → Domains, tambahkan `mizuhamzazu.vtube-info.xyz` sebagai
+custom domain. Kalau `*.vtube-info.xyz` sudah diarahkan ke Vercel lewat DNS
+wildcard, subdomain ini langsung nyambung tanpa langkah tambahan.
 **Netlify** - build `npm run build`, publish `dist`. `public/_headers` ikut
 tersalin untuk cache.
 

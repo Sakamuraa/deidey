@@ -1,6 +1,7 @@
 import { Play } from "@phosphor-icons/react";
 
 import { uploads } from "@/content/site";
+import { asset } from "@/lib/paths";
 import { Reveal, StaggerGroup, StaggerItem } from "@/lib/reveal";
 
 /**
@@ -47,7 +48,7 @@ export function Uploads() {
                     for the square avatar, where it echoes a doorway. */}
                 <div className="overflow-hidden rounded-card border border-line bg-surface">
                   <img
-                    src={item.file}
+                    src={asset(item.file)}
                     alt=""
                     width={1280}
                     height={720}

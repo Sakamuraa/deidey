@@ -3,6 +3,7 @@
 import { ActionLink } from "@/components/Action";
 import { XMark, YoutubeMark } from "@/components/ChannelIcons";
 import { channels, site } from "@/content/site";
+import { asset } from "@/lib/paths";
 import { EASE_OUT_EXPO } from "@/lib/reveal-motion";
 
 /**
@@ -68,7 +69,7 @@ export function Hero() {
             }}
           >
             <img
-              src={site.avatar}
+              src={asset(site.avatar)}
               alt={site.avatarAlt}
               width={800}
               height={800}

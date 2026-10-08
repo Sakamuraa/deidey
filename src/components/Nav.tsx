@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ActionLink } from "@/components/Action";
 import { HeartMark, XMark, YoutubeMark } from "@/components/ChannelIcons";
 import { channels, navigation, site } from "@/content/site";
+import { asset } from "@/lib/paths";
 import { useTheme } from "@/lib/useTheme";
 
 /** Light/dark switch. Reads and writes the same attribute the pre-paint script set. */
@@ -63,7 +64,7 @@ export function Nav() {
             className="flex items-center gap-2.5 font-display text-[1.05rem] font-semibold tracking-tight"
           >
             <img
-              src={site.avatarSmall}
+              src={asset(site.avatarSmall)}
               alt=""
               width={32}
               height={32}
@@ -95,7 +96,7 @@ export function Nav() {
                   href={channels.youtube.url}
                   external
                   variant="quiet"
-                  className="size-10 px-0"
+                  size="icon"
                   aria-label={`${channels.youtube.label} ${channels.youtube.handle}`}
                   title={`${channels.youtube.label} ${channels.youtube.handle}`}
                 >
@@ -107,7 +108,7 @@ export function Nav() {
                   href={channels.x.url}
                   external
                   variant="quiet"
-                  className="size-10 px-0"
+                  size="icon"
                   aria-label={`${channels.x.label} ${channels.x.handle}`}
                   title={`${channels.x.label} ${channels.x.handle}`}
                 >

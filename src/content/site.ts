@@ -16,12 +16,17 @@ export const site = {
   channelTitle: "Mizu Hamzazu Ch.",
   /** Description as published by the creator, trimmed of decoration. */
   bio: "Mizu, salah satu putri dari kerajaan Hamzazu. Hamster princess, ID/EN VTuber, Live 2D.",
-  url: "https://mizuhamzazu.example",
+  /**
+   * Production origin. The site is served from its own subdomain, so the origin
+   * and the site URL are the same thing. Kept in sync with index.html,
+   * robots.txt, and sitemap.xml.
+   */
+  url: "https://mizuhamzazu.vtube-info.xyz",
   locale: "id_ID",
-  avatar: "/media/avatar-youtube.jpg",
+  avatar: "/media/avatar-youtube.webp",
   avatarAlt: "Ilustrasi Mizu Hamzazu: karakter anime berwarna rambut peach memakai mahkota emas",
   /** Smaller crop used for the nav mark, where the square version is too heavy. */
-  avatarSmall: "/media/avatar-x.jpg",
+  avatarSmall: "/media/avatar-x.webp",
   joined: "Bergabung pada Juli 2021",
   /** Character work credits, from the creator's own X bio. */
   credits: [
