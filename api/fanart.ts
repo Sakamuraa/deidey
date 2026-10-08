@@ -80,10 +80,26 @@ function decodeEntities(text: string): string {
 }
 
 function stripHtml(html: string): string {
-  return decodeEntities(html.replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, " "))
-    .replace(/[ \t]+/g, " ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  return (
+    decodeEntities(
+      html
+        // Nitter wraps descriptions in CDATA, and the closing marker sits inside
+        // the tag match, so it survives and prints as a literal "]]>" in the
+        // caption unless it is taken off first.
+        .replace(/<!\[CDATA\[/gi, "")
+        .replace(/\]\]>/g, "")
+        .replace(/<br\s*\/?>/gi, "\n")
+        .replace(/<[^>]+>/g, " "),
+    )
+      .replace(/[ \t]+/g, " ")
+      .replace(/\n{3,}/g, "\n\n")
+      // Any address left is the search's own link to the instance, or the proxy
+      // path for the image. Neither belongs in a caption a reader would quote.
+      .replace(/https?:\/\/\S+/gi, "")
+      .replace(/\s+([,.;:!?])/g, "$1")
+      .replace(/[ \t]{2,}/g, " ")
+      .trim()
+  );
 }
 
 /** Nitter's image proxy path back to Twitter's, so the link outlives the instance. */
@@ -158,6 +174,8 @@ function parseFeed(xml: string): Fanart[] {
 
   return out;
 }
+
+export { parseFeed }
 
 export default async function handler(_req: FanartRequest, res: FanartResponse) {
   let fanart: Fanart[] = [];
