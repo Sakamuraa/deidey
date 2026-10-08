@@ -74,7 +74,6 @@ export function Nav({
                 ? (event) => {
                     event.preventDefault();
                     onNavigate("home");
-                    window.scrollTo(0, 0);
                   }
                 : undefined
             }
@@ -112,7 +111,6 @@ export function Nav({
                             ? (event) => {
                                 event.preventDefault();
                                 onNavigate("konten");
-                                window.scrollTo(0, 0);
                               }
                             : undefined
                         }

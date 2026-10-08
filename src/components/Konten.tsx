@@ -74,12 +74,14 @@ export function Konten() {
     <section id="isi-konten" aria-labelledby="konten-heading" className="py-24 md:py-32">
       <div className="shell">
         <Reveal amount={0.3}>
-          <h2
+          {/* h1, not h2. The home page's h1 lives in the hero, which this route
+              does not render, so this is the only page-level heading here. */}
+          <h1
             id="konten-heading"
             className="text-3xl font-semibold leading-tight tracking-tight md:text-4xl"
           >
             Konten
-          </h2>
+          </h1>
           <p className="mt-5 max-w-[52ch] text-base leading-relaxed text-fg-muted md:text-lg">
             Tiga kategori, semuanya dibaca dari channel dan dari pencarian YouTube
             saat halaman dibuka.
