@@ -345,6 +345,15 @@ export default async function handler(req: UploadsRequest, res: UploadsResponse)
     return;
   }
 
+  // TEMPORARY DIAGNOSTIC - REMOVE
+  const probe = req.url?.match(/[?&]probe=([A-Za-z0-9_-]{11})/)?.[1];
+  if (probe) {
+    const iso = await readStartTime(probe);
+    res.setHeader("Cache-Control", "no-store");
+    res.status(200).json({ probe, iso, wib: iso ? toWib(iso) : null });
+    return;
+  }
+
   // Warm instance, fresh enough: answer without touching YouTube at all. While a
   // stream is running that window is ten minutes; once it ends, half an hour is
   // safe and keeps the watch-page burst rare.
