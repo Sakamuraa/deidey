@@ -17,15 +17,14 @@
  *    carries no liveBroadcastDetails, and the InnerTube player endpoint returns
  *    liveBroadcastDetails as null for a plain WEB client.
  *
- * 3. The watch page is ~1.3 MB, so it is the expensive half of this endpoint:
- *    nine of them is about twelve megabytes. That is affordable at the request
- *    rates below and not affordable per visitor, which is what the two cache
- *    layers are for. A start time is cached per videoId for a week, because a
- *    finished stream's startTimestamp never moves; a running one is re-read
- *    every ten minutes because that is the entry still in motion. Measured on
- *    all nine current archives: every one carries both `startTimestamp` and
- *    `endTimestamp`, so the blank-times problem is a cost decision, not a
- *    data-availability one.
+ * 3. The watch page is ~1.3 MB, and on a datacenter IP it is often not served at
+ *    all: YouTube answers with the consent interstitial, HTTP 200, no
+ *    `liveBroadcastDetails`. Measured in production on a cold lambda, nine
+ *    parallel watch fetches returned exactly one usable page. So committed
+ *    start times answer the cards that already exist, a CONSENT cookie makes a
+ *    new fetch plausible at all, and the request is retried once before a card
+ *    is allowed to stay blank. A start time never changes once a broadcast
+ *    ends, which is what makes committing it honest rather than a shortcut.
  *
  * The list itself comes from the channel's /streams tab sorted newest first,
  * which is the only surface that reports live state, and reports it in the same
@@ -48,11 +47,36 @@ const HANDLE = "@MizuHamzazu";
 const STREAMS_TAB = `https://www.youtube.com/${HANDLE}/streams?view=0&sort=dd&flow=grid&hl=id&gl=ID`;
 
 const UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko, Chrome/131.0.0.0 Safari/537.36";
 
 const LIMIT = 8;
-const TIMEOUT_MS = 7000;
+/** A cold Vercel lambda booting nine 1.3 MB fetches is not a seven second job. */
+const TIMEOUT_MS = 15000;
 const CHANNEL_TZ_OFFSET_HOURS = 7; // WIB
+
+/**
+ * Verified broadcast starts, read from each watch page and committed.
+ *
+ * A `startTimestamp` never changes once a broadcast has ended, so these are
+ * facts rather than a cache, and treating them as facts is what keeps this
+ * endpoint affordable. Measured from production: nine watch-page fetches on a
+ * cold lambda returned exactly one usable page and eight blank times, so
+ * reading every card fresh is not a plan that survives contact with a
+ * datacenter IP. The known ones are answered from this table with no upstream
+ * request at all; a genuinely new broadcast is the only thing that costs a
+ * fetch, and then it is one.
+ */
+const KNOWN_STARTS: Record<string, string> = {
+  S6PD4T8H4Cw: "2026-10-08T01:00:29+00:00",
+  bgnGUHwGNqs: "2026-10-07T09:30:30+00:00",
+  "XYDuOH8Q4-Y": "2026-10-07T01:01:02+00:00",
+  "8UlKFnlvo00": "2026-10-06T10:00:23+00:00",
+  M1ANn11KH2Q: "2026-10-05T13:00:24+00:00",
+  j533fLKIn4k: "2026-10-05T09:32:41+00:00",
+  "618FhJnhs8g": "2026-10-04T08:30:28+00:00",
+  It9c17pa3UY: "2026-10-03T02:00:46+00:00",
+  p493GuHW9HY: "2026-10-02T02:00:08+00:00",
+};
 
 const LIVE_BADGE = /LIVE_NOW|BADGE_STYLE_LIVE|"LIVE"/;
 /**
@@ -75,7 +99,14 @@ async function fetchText(url: string): Promise<string | null> {
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
     const res = await fetch(url, {
-      headers: { "user-agent": UA, "accept-language": "id-ID,id;q=0.9" },
+      headers: {
+        "user-agent": UA,
+        "accept-language": "id-ID,id;q=0.9",
+        // Without this, a datacenter IP gets the consent interstitial instead of
+        // the page, which returns HTTP 200 and a document with no
+        // liveBroadcastDetails in it. A blank time, not an error.
+        cookie: "CONSENT=YES+cb.20210328-17-p0.en+FX+100",
+      },
       signal: controller.signal,
     });
     if (!res.ok) return null;
@@ -214,7 +245,9 @@ function toWib(iso: string): { day: string; time: string; date: string } {
   const days = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 
   return {
-    date: iso.slice(0, 10),
+    // Shifted first, then sliced: a 07.00 WIB start is the previous day in UTC,
+    // so slicing the raw ISO would report the wrong calendar date.
+    date: shifted.toISOString().slice(0, 10),
     day: days[shifted.getUTCDay()],
     time: `${String(shifted.getUTCHours()).padStart(2, "0")}.${String(shifted.getUTCMinutes()).padStart(2, "0")} WIB`,
   };
@@ -255,6 +288,11 @@ const START_TTL_NULL_MS = 5 * 60 * 1000;
  * per cold cache window, not one per visitor.
  */
 async function resolveStart(entry: StreamEntry, attempt = 0): Promise<string | null> {
+  // A finished broadcast's start is immutable, so a committed reading wins over
+  // every cache and every fetch.
+  const known = KNOWN_STARTS[entry.videoId];
+  if (known) return known;
+
   const hit = startCache.get(entry.videoId);
   const ttl = entry.live ? START_TTL_LIVE_MS : START_TTL_ARCHIVED_MS;
 
@@ -262,9 +300,8 @@ async function resolveStart(entry: StreamEntry, attempt = 0): Promise<string | n
 
   const iso = await readStartTime(entry.videoId);
 
-  // A null among nine parallel fetches is usually one unlucky request, not nine
-  // missing broadcasts, so it gets exactly one more go before a card is allowed
-  // to stay blank.
+  // A miss is usually one unlucky request, not a missing timestamp, so it gets
+  // exactly one more go before a card is allowed to stay blank.
   if (iso === null && attempt === 0) return resolveStart(entry, 1);
 
   startCache.set(entry.videoId, { iso, at: Date.now() });

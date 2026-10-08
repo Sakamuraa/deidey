@@ -59,19 +59,25 @@ di-parse dari `lockupViewModel`. Dua hal yang perlu diketahui:
   di arsip yang sudah selesai. Semua sembilan arsip yang diperiksa punya
   `startTimestamp` dan `endTimestamp`.
 
-Halaman watch itu 1,3 MB, jadi sembilan permintaan adalah bagian mahal dari
-endpoint ini. Dua lapis cache yang menutup biaya itu:
+Halaman watch itu 1,3 MB, dan dari IP datacenter sering tidak dikasih sama
+sekali: YouTube menjawab dengan halaman persetujuan cookie, HTTP 200, tanpa
+`liveBroadcastDetails` di dalamnya. Terukur di produksi pada lambda dingin:
+sembilan request paralel menghasilkan tepat satu halaman yang bisa dipakai.
+Maka:
 
-- **Per videoId, di memori warm instance.** Arsip yang selesai Immutable,
-  jadi TTL seminggu, bukan tebakan. Entry yang sedang live di-read ulang tiap
-  10 menit karena satu-satunya yang masih bergerak. Hasil negatif disimpan 5
-  menit saja, karena `null` itu fakta soal satu request, bukan soal video.
-- **Per payload.** `s-maxage=300` kalau ada yang live, `s-maxage=3600` kalau
-  sepi, karena arsip yang sudah selesai tidak berubah berjam-jam.
+- **Waktu yang sudah-known dijawab dari tabel.** `KNOWN_STARTS` di
+  `api/uploads.ts` menyimpan hasil baca watch page yang sudah diverifikasi. Ini
+  fakta, bukan cache, karena `startTimestamp` tidak berubah setelah broadcast
+  selesai. Kartu yang sudah ada nol request.
+- **Broadcast baru satu request.** Kalau `videoId` tidak ada di tabel, itu satu-
+  satunya yang harus baca halaman watch.
+- **Request dapat satu percobaan ulang** sebelum kartu boleh tetap kosong, dan
+  hasil negatif disimpan 5 menit saja karena `null` itu fakta soal satu request.
+- **`cookie: CONSENT=YES+...`** dikirim, supaya IP datacenter tidak diarahkan ke
+  interstitial.
 
-Sapuan sembilan watch page jalan paralel, satu kali per jendela cache, bukan
-sekali per pengunjung. Request yang gagal dapat satu percobaan ulang sebelum
-kartu boleh tetap kosong.
+Cache per payload tetap ada: `s-maxage=300` kalau ada yang live, `s-maxage=3600`
+kalau sepi, karena arsip yang selesai tidak berubah berjam-jam.
 
 Kalau upstream gagal, function mengembalikan snapshot terakhir yang masih ada
 dengan header `stale`, bukan 500.
@@ -211,8 +217,11 @@ Chrome headless terhadap `npm run preview`:
   dipakai untuk memastikan logika state-nya benar di kedua sisi transisi.
 - Delapan kartu, `missing=0`: setiap satu punya `startedAt` dan `startedDay`,
   contoh `Mulai Kamis, 08.00 WIB` sampai `Mulai Sabtu, 09.00 WIB`.
-- Cold pass 1103ms untuk sembilan watch page paralel; pass kedua di instance
-  yang sama 0ms dengan `X-Data-Source: memory` dan 9 waktu utuh.
+- Versi pertama dari perubahan ini lolos lokal (sembilan watch page paralel,
+  1103ms, `missing=0`) tapi gagal di produksi: hanya 1 dari 9 waktu yang
+  sampai, sisanya kosong karena interstitial persetujuan cookie. Itu yang
+  motivate tabel `KNOWN_STARTS`. Penting dicatat, karena tes lokal tidak
+  menangkap masalah ini sama sekali.
 
 End-to-end di simulator Vercel: 8 kartu, endpoint terjangkau, thumbnail cocok
 dengan `videoId`, badge dan intro ikut jumlah live dari API, dan catatan
