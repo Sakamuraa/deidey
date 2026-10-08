@@ -48,18 +48,16 @@ export function Tweets() {
         {tweets.length > 0 ? (
           <StaggerGroup
             /*
-             * Multi-column rather than a grid.
+             * One column, in order.
              *
-             * These cards are all different heights — some are one line, some carry
-             * a photo — and a grid row is as tall as its tallest card, so the short
-             * ones sat in boxes with a hole under them and the columns ended ragged.
-             * A grid cannot do better without masonry; columns pack, so each card
-             * takes exactly the room it needs and the next one starts right below it.
-             *
-             * break-inside-avoid is what stops a card being split across a column
-             * boundary, which is the whole risk with columns.
+             * Two columns looked tidier but broke the reading order: multi-column
+             * fills the first column to the bottom before starting the second, so
+             * reading left to right gave post 1, then post 14, then 15 — with the
+             * newest at the top and "newest first" being the whole promise of the
+             * page. A single column cannot put a hole under a short card either,
+             * which was the other reason for the change, so it costs nothing here.
              */
-            className="mt-14 gap-5 sm:columns-2 [column-fill:_balance]"
+            className="mt-14"
             stagger={0.04}
             amount={0.06}
           >
