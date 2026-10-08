@@ -17,11 +17,15 @@
  *    carries no liveBroadcastDetails, and the InnerTube player endpoint returns
  *    liveBroadcastDetails as null for a plain WEB client.
  *
- * 3. The watch page is ~1.3 MB. Fetching it for all eight cards would pull ten
- *    megabytes per cold request and earn a rate limit. So it is fetched at most
- *    once, and only while a stream is actually running, which is exactly the one
- *    card where "mulai jam berapa" is worth anything. Finished cards carry no
- *    time rather than a wrong one.
+ * 3. The watch page is ~1.3 MB, so it is the expensive half of this endpoint:
+ *    nine of them is about twelve megabytes. That is affordable at the request
+ *    rates below and not affordable per visitor, which is what the two cache
+ *    layers are for. A start time is cached per videoId for a week, because a
+ *    finished stream's startTimestamp never moves; a running one is re-read
+ *    every ten minutes because that is the entry still in motion. Measured on
+ *    all nine current archives: every one carries both `startTimestamp` and
+ *    `endTimestamp`, so the blank-times problem is a cost decision, not a
+ *    data-availability one.
  *
  * The list itself comes from the channel's /streams tab sorted newest first,
  * which is the only surface that reports live state, and reports it in the same
@@ -228,6 +232,46 @@ async function readStartTime(videoId: string): Promise<string | null> {
 }
 
 /**
+ * Start times per videoId, kept for the life of the warm instance.
+ *
+ * A finished stream's start is immutable, so a week is the honest TTL rather
+ * than a guess. The running stream is the exception: it is the one entry whose
+ * badge and viewer row still change, and a short TTL keeps its clock honest if
+ * the stream is restarted.
+ */
+const startCache = new Map<string, { iso: string | null; at: number }>();
+const START_TTL_ARCHIVED_MS = 7 * 24 * 60 * 60 * 1000;
+const START_TTL_LIVE_MS = 10 * 60 * 1000;
+/**
+ * A miss is not a fact about the video, it is a fact about one request, so it is
+ * remembered briefly instead of for a week.
+ */
+const START_TTL_NULL_MS = 5 * 60 * 1000;
+
+/**
+ * Start time for one entry, cache first.
+ *
+ * Nine watch pages in parallel is the shape of the cost here: it is one burst
+ * per cold cache window, not one per visitor.
+ */
+async function resolveStart(entry: StreamEntry, attempt = 0): Promise<string | null> {
+  const hit = startCache.get(entry.videoId);
+  const ttl = entry.live ? START_TTL_LIVE_MS : START_TTL_ARCHIVED_MS;
+
+  if (hit && Date.now() - hit.at < (hit.iso === null ? START_TTL_NULL_MS : ttl)) return hit.iso;
+
+  const iso = await readStartTime(entry.videoId);
+
+  // A null among nine parallel fetches is usually one unlucky request, not nine
+  // missing broadcasts, so it gets exactly one more go before a card is allowed
+  // to stay blank.
+  if (iso === null && attempt === 0) return resolveStart(entry, 1);
+
+  startCache.set(entry.videoId, { iso, at: Date.now() });
+  return iso;
+}
+
+/**
  * Last successful payload, held in the module scope.
  *
  * Vercel keeps a warm lambda around for a while after a request, so this turns
@@ -238,8 +282,9 @@ async function readStartTime(videoId: string): Promise<string | null> {
  * development: the streams tab started returning 503 after a few dozen fetches,
  * which is exactly the failure a stale copy can paper over.
  */
-let lastGood: { payload: unknown; at: number } | null = null;
-const MEMORY_TTL_MS = 10 * 60 * 1000;
+let lastGood: { payload: unknown; at: number; liveCount: number } | null = null;
+const MEMORY_TTL_LIVE_MS = 10 * 60 * 1000;
+const MEMORY_TTL_QUIET_MS = 30 * 60 * 1000;
 
 export default async function handler(req: UploadsRequest, res: UploadsResponse) {
   if (req.method && req.method !== "GET") {
@@ -248,12 +293,23 @@ export default async function handler(req: UploadsRequest, res: UploadsResponse)
     return;
   }
 
-  // Warm instance, fresh enough: answer without touching YouTube at all.
-  if (lastGood && Date.now() - lastGood.at < MEMORY_TTL_MS) {
-    res.setHeader("Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
-    res.setHeader("X-Data-Source", "memory");
-    res.status(200).json(lastGood.payload);
-    return;
+  // Warm instance, fresh enough: answer without touching YouTube at all. While a
+  // stream is running that window is ten minutes; once it ends, half an hour is
+  // safe and keeps the watch-page burst rare.
+  if (lastGood) {
+    const ttl = lastGood.liveCount > 0 ? MEMORY_TTL_LIVE_MS : MEMORY_TTL_QUIET_MS;
+
+    if (Date.now() - lastGood.at < ttl) {
+      res.setHeader(
+        "Cache-Control",
+        lastGood.liveCount > 0
+          ? "public, s-maxage=300, stale-while-revalidate=600"
+          : "public, s-maxage=3600, stale-while-revalidate=86400",
+      );
+      res.setHeader("X-Data-Source", "memory");
+      res.status(200).json(lastGood.payload);
+      return;
+    }
   }
 
   const html = await fetchText(STREAMS_TAB);
@@ -274,13 +330,12 @@ export default async function handler(req: UploadsRequest, res: UploadsResponse)
   }
 
   const top = streams.slice(0, LIMIT);
-  // One watch-page fetch, and only while something is running. A live stream is
-  // always the newest entry.
-  const liveIndex = top.findIndex((entry) => entry.live);
-  const liveStart = liveIndex >= 0 ? await readStartTime(top[liveIndex].videoId) : null;
+  // One watch-page fetch per card, in parallel, each memoised by videoId. These
+  // are the only fields in the payload that cost a second upstream request.
+  const starts = await Promise.all(top.map((entry) => resolveStart(entry)));
 
   const uploads = top.map((entry, index) => {
-    const startTime = index === liveIndex && liveStart ? toWib(liveStart) : null;
+    const startTime = starts[index] ? toWib(starts[index] as string) : null;
 
     return {
       videoId: entry.videoId,
@@ -289,26 +344,38 @@ export default async function handler(req: UploadsRequest, res: UploadsResponse)
       thumbnail: entry.thumbnail,
       live: entry.live,
       viewers: entry.live ? entry.viewers : null,
-      // Only the running stream gets a start time. Deliberately null otherwise:
-      // the cheap source for it is wrong by hours and the accurate source is
-      // too expensive to fetch eight times.
+      // Real broadcast start from liveBroadcastDetails, not the feed's publish
+      // time, which runs hours late and can land on a different day. Null only
+      // when the watch page itself could not be read.
       startedAt: startTime?.time ?? null,
       startedDay: startTime?.day ?? null,
+      startedDate: startTime?.date ?? null,
     };
   });
 
+  const liveCount = uploads.filter((upload) => upload.live).length;
+
   const payload = {
     fetchedAt: new Date().toISOString(),
-    liveCount: uploads.filter((upload) => upload.live).length,
+    liveCount,
     stale: false,
     uploads,
   };
 
-  lastGood = { payload, at: Date.now() };
+  lastGood = { payload, at: Date.now(), liveCount };
 
-  res.setHeader("Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
+  // A finished archive does not change for hours, so a quiet channel gets a
+  // long edge window and pays for those watch pages rarely. Once something is
+  // running the cache drops to five minutes, because that is the state a visitor
+  // is actually watching change.
+  res.setHeader(
+    "Cache-Control",
+    liveCount > 0
+      ? "public, s-maxage=300, stale-while-revalidate=600"
+      : "public, s-maxage=3600, stale-while-revalidate=86400",
+  );
   res.setHeader("X-Data-Source", "live");
   res.status(200).json(payload);
 }
 
-export { parseStreamsTab, parseViewerCount, toWib, stripLiveMarker, readStartTime };
+export { parseStreamsTab, parseViewerCount, toWib, stripLiveMarker, readStartTime, resolveStart };

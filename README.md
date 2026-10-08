@@ -53,17 +53,28 @@ di-parse dari `lockupViewModel`. Dua hal yang perlu diketahui:
   rate limit lintas channel dari IP yang sama, jadi `./streams` yang dipakai
   sebagai sumber utama.
 - **Jam bukan dari feed.** `published` di feed cuma waktu publish, bukan waktu
-  mulai stream; selisihnya terukur 2,3 sampai 13,5 jam. Jam hanya ditampilkan
-  untuk stream yang sedang live, dan diambil dari
-  `liveBroadcastDetails.startTimestamp` di halaman watch. Feed hanya dibaca
-  saat ada badge `LIVE`, jadi request kedua itu jarang terjadi.
+  mulai stream; selisihnya terukur 2,3 sampai 13,5 jam dan bisa jatuh di hari
+  yang berbeda. Jam setiap kartu diambil dari
+  `liveBroadcastDetails.startTimestamp` di halaman watch, yang nyamar ada juga
+  di arsip yang sudah selesai. Semua sembilan arsip yang diperiksa punya
+  `startTimestamp` dan `endTimestamp`.
 
-Kartu non-live sengaja tidak menampilkan jam sama sekali, karena snapshot lokal
-tidak punya jam dan mengarang angka lebih buruk daripada tidak menampilkannya.
+Halaman watch itu 1,3 MB, jadi sembilan permintaan adalah bagian mahal dari
+endpoint ini. Dua lapis cache yang menutup biaya itu:
 
-Cache: `s-maxage=300` di edge, 10 menit di memori warm instance. Saat upstream
-gagal, function mengembalikan snapshot terakhir yang masih ada dengan header
-`stale`, bukan 500.
+- **Per videoId, di memori warm instance.** Arsip yang selesai Immutable,
+  jadi TTL seminggu, bukan tebakan. Entry yang sedang live di-read ulang tiap
+  10 menit karena satu-satunya yang masih bergerak. Hasil negatif disimpan 5
+  menit saja, karena `null` itu fakta soal satu request, bukan soal video.
+- **Per payload.** `s-maxage=300` kalau ada yang live, `s-maxage=3600` kalau
+  sepi, karena arsip yang sudah selesai tidak berubah berjam-jam.
+
+Sapuan sembilan watch page jalan paralel, satu kali per jendela cache, bukan
+sekali per pengunjung. Request yang gagal dapat satu percobaan ulang sebelum
+kartu boleh tetap kosong.
+
+Kalau upstream gagal, function mengembalikan snapshot terakhir yang masih ada
+dengan header `stale`, bukan 500.
 
 Klien: `src/lib/useUploads.ts` memanggil endpoint itu, dan jatuh ke snapshot
 lokal di `public/media` kalau gagal, supaya section tidak pernah kosong. Thumbnail
@@ -96,8 +107,10 @@ di JSX secara langsung, pakai `asset()` dari `src/lib/paths.ts`.
 Semua string ada di satu file: `src/content/site.ts`.
 
 1. **`site.bio`** dan **`site.credits`** - kalau deskripsi channel berubah.
-2. **`uploads.items`** - snapshot lokal di `public/media`. Dipakai hanya saat
-   `/api/uploads` gagal, jadi boleh lebih lama dari kondisi channel sekarang.
+2. **`SNAPSHOT` di `src/lib/useUploads.ts`** - salinan lokal delapan broadcast
+   beserta jam mulainya yang asli. Dipakai hanya saat `/api/uploads` gagal atau
+   pada host statis tanpa serverless, jadi boleh lebih lama dari kondisi channel
+   sekarang. Thumbnail-nya ada di `public/media`.
 
 ## Isi halaman
 
@@ -196,6 +209,10 @@ Chrome headless terhadap `npm run preview`:
   `08.00 WIB` dari `startTimestamp`.
 - Setelah stream selesai: `liveCount 0`, kartu badge hilang sendiri. Ini yang
   dipakai untuk memastikan logika state-nya benar di kedua sisi transisi.
+- Delapan kartu, `missing=0`: setiap satu punya `startedAt` dan `startedDay`,
+  contoh `Mulai Kamis, 08.00 WIB` sampai `Mulai Sabtu, 09.00 WIB`.
+- Cold pass 1103ms untuk sembilan watch page paralel; pass kedua di instance
+  yang sama 0ms dengan `X-Data-Source: memory` dan 9 waktu utuh.
 
 End-to-end di simulator Vercel: 8 kartu, endpoint terjangkau, thumbnail cocok
 dengan `videoId`, badge dan intro ikut jumlah live dari API, dan catatan

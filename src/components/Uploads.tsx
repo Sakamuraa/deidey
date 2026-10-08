@@ -58,7 +58,9 @@ export function Uploads() {
         <p className="mt-12 flex items-center gap-2 text-xs text-fg-subtle">
           <Broadcast size={14} aria-hidden="true" />
           {source === "api"
-            ? "Dibaca langsung dari channel, diperbarui tiap lima menit."
+            ? live
+              ? "Dibaca langsung dari channel, disegarkan tiap lima menit selama ada yang live."
+              : "Dibaca langsung dari channel, termasuk jam mulai tiap broadcast."
             : source === "loading"
               ? "Mengambil data terbaru."
               : "Menampilkan salinan tersimpan. Data langsung tidak tersedia."}
@@ -130,11 +132,11 @@ function BroadcastCard({
             {item.title}
           </span>
 
-          {item.live && (item.startedAt || item.viewers !== null) && (
+          {(item.startedAt || item.viewers !== null) && (
             <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-fg-subtle">
-              {/* Only the running stream gets a start time. It costs one watch
-                  page fetch and is read from liveBroadcastDetails, not from
-                  the feed, which is hours off. */}
+              {/* Every card carries its real broadcast start, read from
+                  liveBroadcastDetails. The feed's publish time is hours late
+                  and can fall on a different day, so it is never used here. */}
               {item.startedAt && (
                 <span>
                   Mulai{item.startedDay ? ` ${item.startedDay},` : ""} {item.startedAt}
