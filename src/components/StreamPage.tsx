@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Archive, ArrowSquareOut, ChatCircle, Eye, Play, Spinner } from "@phosphor-icons/react";
 
@@ -226,6 +226,17 @@ function MetaRow({ item }: { item: ContentItem | null }) {
  * the header says replay and the reader pulls further stretches in as they go.
  * A broadcast with no chat at all is the only case that gets an explanation.
  */
+/**
+ * How much of the recording to hold either side of the playhead.
+ *
+ * Behind it is a conversation worth reading; a little ahead of it so a message
+ * does not appear after the line it answers. A replay page from YouTube spans
+ * around twenty minutes, so the window is what keeps a two-second-old video from
+ * opening on twenty minutes of chat.
+ */
+const BEHIND_SECONDS = 90;
+const AHEAD_SECONDS = 15;
+
 function ChatPanel({
   videoId,
   chat,
@@ -244,13 +255,30 @@ function ChatPanel({
   const logRef = useRef<HTMLDivElement>(null);
 
   /**
-   * Everything that has been read, in order, newest at the bottom.
+   * The stretch of the transcript that belongs on screen right now.
    *
-   * Nothing is dropped when the playhead moves. A seek used to look like the chat
-   * had been deleted because the list was replaced; now a peeked stretch joins what
-   * was already there, and the log scrolls to wherever the video happens to be.
+   * Two separate things, and keeping them separate is the whole point:
+   *
+   *   messages  everything ever read. Nothing is dropped, so peeking an hour in
+   *             and coming back does not find the earlier chat emptied out.
+   *   visible   only the lines around where the video is. Without this the log
+   *             opens on forty-seven messages spanning twenty-one minutes while
+   *             the video has been running two seconds, which is not a chat
+   *             anybody is watching — chat arrives as the broadcast does.
+   *
+   * A live stream has no fixed positions, so it shows everything it holds.
    */
-  const visible = messages;
+  const visible = useMemo(() => {
+    if (mode !== "replay" || !started) return messages;
+
+    return messages.filter((m) => {
+      if (m.offsetSeconds === null) return false;
+      // A little behind the playhead, so there is a conversation to read rather
+      // than one line, and a little ahead so a reply does not land after the line
+      // it answers.
+      return m.offsetSeconds <= currentTime + AHEAD_SECONDS && m.offsetSeconds >= currentTime - BEHIND_SECONDS;
+    });
+  }, [messages, mode, started, currentTime]);
 
   // Follow new messages in a live stream, which genuinely arrives at the bottom.
   // A replay does not use this: its log is anchored to the playhead instead, and
@@ -325,7 +353,7 @@ function ChatPanel({
           <ChatCircle size={18} aria-hidden="true" className="text-fg-muted" />
         )}
         <h2 className="text-sm font-semibold">{mode === "replay" ? "Replay chat" : "Live chat"}</h2>
-        {messages.length > 0 && started && (
+        {visible.length > 0 && started && (
           <span className="ml-auto font-mono text-xs text-fg-subtle">{visible.length}</span>
         )}
       </div>
