@@ -77,7 +77,6 @@ const MAX_FAILURES = 4;
  * forty-five seconds, so this is one or two pages' worth.
  */
 const BEHIND_SECONDS = 90;
-const AHEAD_SECONDS = 20;
 
 /**
  * How long the playhead must settle before the chat goes and gets the stretch
@@ -85,8 +84,24 @@ const AHEAD_SECONDS = 20;
  */
 const SEEK_SETTLE_MS = 700;
 
-/** Slack before deciding the playhead has left the stretch that is held. */
-const EDGE_MARGIN_SECONDS = 15;
+/**
+ * How far past the end of what has been read counts as a jump rather than as the
+ * video simply moving on.
+ *
+ * Two minutes of a broadcast can be genuinely quiet, and re-seeking on every quiet
+ * stretch would throw away a transcript that is still being read. Past this, the
+ * visitor has scrubbed somewhere the log has nothing for.
+ */
+const JUMP_SECONDS = 120;
+
+/**
+ * Cap on messages held for a replay.
+ *
+ * A long broadcast runs to tens of thousands of lines. The box shows a window of
+ * them and the page should not grow without limit; this is a page's worth, roughly,
+ * and past it the reader keeps what they have rather than pulling forever.
+ */
+const MESSAGE_LIMIT = 400;
 
 /**
  * Chat for one broadcast, live or replayed.
@@ -110,7 +125,7 @@ const EDGE_MARGIN_SECONDS = 15;
  * Polling is paused while the tab is hidden, because a serverless function bills
  * per invocation and chat nobody is looking at is not worth paying for.
  */
-export function useLiveChat(videoId: string, started: boolean, currentTime: number): State {
+export function useLiveChat(videoId: string, currentTime: number): State {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [title, setTitle] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode | null>(null);
@@ -144,6 +159,8 @@ export function useLiveChat(videoId: string, started: boolean, currentTime: numb
    * a second: a flicker, and a billed request per second.
    */
   const loaded = useRef(false);
+  /** How many messages are held, so reading forward can stop at some point. */
+  const held = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
 
   const clear = useCallback(() => {
@@ -154,6 +171,7 @@ export function useLiveChat(videoId: string, started: boolean, currentTime: numb
     from.current = 0;
     to.current = 0;
     loaded.current = false;
+    held.current = 0;
 
     setMessages([]);
     setTitle(null);
@@ -309,6 +327,7 @@ export function useLiveChat(videoId: string, started: boolean, currentTime: numb
         }
       }
       loaded.current = true;
+      held.current += fresh.length;
 
       setMessages(
         useCursor
@@ -336,7 +355,7 @@ export function useLiveChat(videoId: string, started: boolean, currentTime: numb
   // Deliberately not keyed on currentTime: that would clear the log every second.
   useEffect(() => {
     clear();
-    if (!videoId || detected !== 'replay' || !started) return;
+    if (!videoId || detected !== 'replay') return;
 
     void (async () => {
       try {
@@ -350,54 +369,58 @@ export function useLiveChat(videoId: string, started: boolean, currentTime: numb
     // currentTime is read, not tracked: it changes every second and the logic below
     // decides for itself when that matters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [videoId, detected, started, clear, loadReplay]);
+  }, [videoId, detected, clear, loadReplay]);
 
-  // React to the playhead moving, but only act when the held stretch is wrong.
+  // React to the playhead moving, but only act when it matters.
   useEffect(() => {
-    if (!videoId || detected !== 'replay' || !started) return;
+    if (!videoId || detected !== "replay") return;
 
     const target = Math.max(0, currentTime);
 
     const settle = setTimeout(() => {
-      const insideSpan =
-        loaded.current && target >= from.current - EDGE_MARGIN_SECONDS && target <= to.current;
-
-      // Already holding the right stretch. Extend forward only when the playhead
-      // is running out of it and there is more to read.
-      if (insideSpan) {
-        if (target < to.current - AHEAD_SECONDS || !cursor.current) return;
+      /*
+       * A jump well past the end of what has been read: the visitor scrubbed into a
+       * stretch nobody has loaded. Start again around where they are, because
+       * paging forward from where they were would walk the whole rest of the
+       * broadcast to arrive.
+       */
+      if (!loaded.current || target > to.current + JUMP_SECONDS) {
+        seen.current.clear();
+        cursor.current = null;
+        from.current = 0;
+        to.current = 0;
+        loaded.current = false;
 
         void (async () => {
           try {
-            await loadReplay(to.current, true);
+            await loadReplay(target - BEHIND_SECONDS, false);
           } catch {
-            // A failed extension keeps what is already held; the next move retries.
+            if (abortRef.current?.signal.aborted) return;
+            failures.current += 1;
+            if (failures.current >= MAX_FAILURES) setStatus("unavailable");
           }
         })();
         return;
       }
 
-      // Somewhere new: start again around it, biased back so there is history
-      // behind the playhead rather than a wall of text in front of it.
-      seen.current.clear();
-      cursor.current = null;
-      from.current = 0;
-      to.current = 0;
-      loaded.current = false;
+      /*
+       * Otherwise keep reading forward, so the log fills out as the video plays on
+       * and the scroll has something behind the playhead. This is what replaces the
+       * load-more button: there is no button because there is nothing to press.
+       */
+      if (!cursor.current || held.current >= MESSAGE_LIMIT) return;
 
       void (async () => {
         try {
-          await loadReplay(target - BEHIND_SECONDS, false);
+          await loadReplay(to.current, true);
         } catch {
-          if (abortRef.current?.signal.aborted) return;
-          failures.current += 1;
-          if (failures.current >= MAX_FAILURES) setStatus("unavailable");
+          // A failed page keeps what is already held; the next tick retries.
         }
       })();
     }, SEEK_SETTLE_MS);
 
     return () => clearTimeout(settle);
-  }, [videoId, detected, started, currentTime, loadReplay]);
+  }, [videoId, detected, currentTime, loadReplay]);
 
   return { messages, title, mode, status };
 }

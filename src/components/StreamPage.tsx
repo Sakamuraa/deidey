@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Archive, ArrowSquareOut, ChatCircle, Eye, Play, Spinner } from "@phosphor-icons/react";
 
@@ -61,7 +61,7 @@ export function StreamPage() {
   // name also comes from it: the site carries only the newest streams, so a link
   // to an older one has no local metadata and would otherwise render as a bare
   // "Broadcast". Fetching chat is also what reads the watch page that names it.
-  const chat = useLiveChat(id ?? "", playback.started, playback.currentTime);
+  const chat = useLiveChat(id ?? "", playback.currentTime);
   const heading = item?.title ?? chat.title;
 
   useEffect(() => {
@@ -98,7 +98,7 @@ export function StreamPage() {
             </div>
 
             <div className="lg:col-span-4">
-              <ChatPanel videoId={id} chat={chat} playback={playback} />
+              <ChatPanel videoId={id} chat={chat} />
             </div>
           </div>
 
@@ -229,56 +229,53 @@ function MetaRow({ item }: { item: ContentItem | null }) {
 function ChatPanel({
   videoId,
   chat,
-  playback,
 }: {
   videoId: string;
   chat: ReturnType<typeof useLiveChat>;
-  playback: { started: boolean; currentTime: number };
 }) {
   const { messages, status, mode } = chat;
   // Which kind of read this is, as the endpoint reported it, not as the site's
   // stream list guesses: the list only carries the newest broadcasts.
   const isLive = mode === "live";
-  const { started, currentTime } = playback;
 
   const logRef = useRef<HTMLDivElement>(null);
 
   /**
-   * A last filter over what the hook holds.
+   * Everything that has been read, newest at the bottom.
    *
-   * The hook already fetches the stretch around the playhead, so this only trims
-   * the edges of a page that reaches further than the window wants. A live stream
-   * has no fixed position, so nothing is filtered there. The window is the readable
-   * past plus a little ahead, so a message does not pop in after the line it
-   * answers.
+   * No playhead windowing. A replay transcript that shows only the minute around
+   * the playhead reads as an empty panel the moment the visitor scrolls away from
+   * where they started, and it is not what a chat log is: YouTube's own live chat
+   * is a continuous scroll of everything said, and this is the same thing for a
+   * broadcast that has ended.
    */
-  const visible = useMemo(() => {
-    if (mode !== "replay" || !started) return messages;
-    return messages.filter((m) => {
-      if (m.offsetSeconds === null) return false;
-      return m.offsetSeconds <= currentTime + 20 && m.offsetSeconds >= currentTime - 90;
-    });
-  }, [messages, mode, started, currentTime]);
+  const visible = messages;
 
   // Keep the newest line in view as the list grows, the way a chat log reads.
+  // Only while the reader is already at the bottom: yanking them back down while
+  // they are reading further up is worse than letting the log grow beneath them.
   useEffect(() => {
-    if (!started) return;
     const node = logRef.current;
-    if (node) node.scrollTop = node.scrollHeight;
-  }, [visible.length, started]);
+    if (!node) return;
+
+    const atBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 80;
+    if (atBottom) node.scrollTop = node.scrollHeight;
+  }, [visible.length]);
 
   return (
     /*
-     * Height comes from an aspect ratio rather than from h-full.
+     * A fixed box, not one that grows with its contents.
      *
-     * h-full cannot work here: a grid row takes its height from its tallest cell,
-     * so a panel sized by h-full asks the row how tall it is, and the row is
-     * waiting to be told. It settles at the chat's own content height instead.
+     * h-full cannot work: a grid row takes its height from its tallest cell, so a
+     * panel sized by h-full asks the row how tall it is, and the row is waiting to
+     * be told — it settles at the chat's own content height instead. An explicit
+     * aspect settles it: the player fills 8 of 12 columns at 16:9, so its height is
+     * (width - gap) * 8/12 * 9/16 = 0.375. The panel fills 4 of 12, so at 8:9 its
+     * height is (width - gap) * 4/12 * 9/8 = 0.375 as well. The two agree, and the
+     * row can take its height from the player.
      *
-     * aspect-[8/9] is not a guess. The player fills 8 of 12 columns at 16:9, so
-     * its height is (width - gap) * 8/12 * 9/16 = 0.375. The panel fills 4 of 12,
-     * so at 8:9 its height is (width - gap) * 4/12 * 9/8 = 0.375 as well. The two
-     * agree exactly, which is what lets the row take its height from the player.
+     * The overflow-hidden and the scrolling child below are what keep it that way:
+     * without them the list would push the box out again the moment it filled.
      */
     <div className="flex max-h-[70vh] flex-col overflow-hidden rounded-card border border-line bg-surface lg:aspect-[8/9] lg:max-h-none">
       <div className="flex items-center gap-2 border-b border-line px-5 py-3.5">
@@ -288,26 +285,12 @@ function ChatPanel({
           <ChatCircle size={18} aria-hidden="true" className="text-fg-muted" />
         )}
         <h2 className="text-sm font-semibold">{mode === "replay" ? "Replay chat" : "Live chat"}</h2>
-        {messages.length > 0 && started && (
+        {messages.length > 0 && (
           <span className="ml-auto font-mono text-xs text-fg-subtle">{visible.length}</span>
         )}
       </div>
 
-      {!started ? (
-        /* Nothing to line up against yet. A replay transcript sitting still next to
-           a paused video is a wall of text out of context, so the panel waits. */
-        <div className="flex min-h-0 flex-1 flex-col justify-center px-5 py-8 text-center">
-          <Play size={22} aria-hidden="true" className="mx-auto text-fg-subtle" weight="fill" />
-          <p className="mt-3 text-sm leading-relaxed text-fg-muted">
-            {status === "loading" ? "Membaca chat…" : "Putar videonya dulu"}
-          </p>
-          {status !== "loading" && (
-            <p className="mt-2 text-xs leading-relaxed text-fg-subtle">
-              Chat-nya muncul bareng video, mengikuti waktu Tayannya.
-            </p>
-          )}
-        </div>
-      ) : visible.length > 0 ? (
+      {visible.length > 0 ? (
         <div
           id="konten-chat-log"
           ref={logRef}
