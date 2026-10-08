@@ -252,16 +252,19 @@ function ChatPanel({
    */
   const visible = messages;
 
-  // Keep the newest line in view as the list grows, the way a chat log reads.
-  // Only while the reader is already at the bottom: yanking them back down while
-  // they are reading further up is worse than letting the log grow beneath them.
+  // Follow new messages in a live stream, which genuinely arrives at the bottom.
+  // A replay does not use this: its log is anchored to the playhead instead, and
+  // scrolling to the bottom while the video sits an hour in would tear the reader
+  // away from the moment they are watching.
   useEffect(() => {
+    if (mode !== "live") return;
+
     const node = logRef.current;
     if (!node) return;
 
     const atBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 80;
     if (atBottom) node.scrollTop = node.scrollHeight;
-  }, [visible.length]);
+  }, [visible.length, mode]);
 
   /*
    * Follow the playhead through the log.

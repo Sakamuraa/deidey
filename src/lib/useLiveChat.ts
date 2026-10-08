@@ -85,11 +85,20 @@ const BEHIND_SECONDS = 90;
 const SEEK_SETTLE_MS = 700;
 
 /**
+ * Slack before reading the next page of a replay.
+ *
+ * The playhead gets this close to the end of what is held before another page is
+ * fetched, so there is always chat past it without the log filling faster than the
+ * video is watched.
+ */
+const AHEAD_SECONDS = 30;
+
+/**
  * How far past the end of what has been read counts as a jump rather than as the
  * video simply moving on.
  *
  * Two minutes of a broadcast can be genuinely quiet, and re-seeking on every quiet
- * stretch would throw away a transcript that is still being read. Past this, the
+ * stretch would pull from a position the visitor has not moved to. Past this, the
  * visitor has scrubbed somewhere the log has nothing for.
  */
 const JUMP_SECONDS = 120;
@@ -415,6 +424,16 @@ export function useLiveChat(videoId: string, currentTime: number): State {
        * and the scroll has something behind the playhead. This is what replaces the
        * load-more button: there is no button because there is nothing to press.
        */
+      /*
+       * Read forward only when the playhead is actually running out of chat.
+       *
+       * Reading on every sample loaded a page a second, so ten seconds of watching
+       * pulled hundreds of lines nobody had reached yet and the scroll appeared to
+       * grow on its own. A little lead is enough: the next page is fetched once the
+       * playhead is within half a minute of the end of what is held, so there is
+       * always something past it and never a flood.
+       */
+      if (target < to.current - AHEAD_SECONDS) return;
       if (!cursor.current || seen.current.size >= MESSAGE_LIMIT) return;
 
       void (async () => {
