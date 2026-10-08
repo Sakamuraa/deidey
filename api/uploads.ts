@@ -1,4 +1,4 @@
-/**
+﻿/**
  * GET /api/uploads
  *
  * Serves the newest broadcasts plus live status, read fresh on every cold
@@ -89,9 +89,9 @@ const LIVE_BADGE = /LIVE_NOW|BADGE_STYLE_LIVE|"LIVE"/;
  */
 const VIEWERS = /([\d.,]+)\s*(?:rb|ribu)?\s+(?:sedang\s+)?(?:menonton|watching)/i;
 
-/** The 🔴 prefix is the channel's own live marker; the UI renders its own badge. */
+/** The ðŸ”´ prefix is the channel's own live marker; the UI renders its own badge. */
 function stripLiveMarker(title: string): string {
-  return title.replace(/^🔴\s*/, "").trim();
+  return title.replace(/^ðŸ”´\s*/, "").trim();
 }
 
 async function fetchText(url: string): Promise<string | null> {
@@ -345,95 +345,6 @@ export default async function handler(req: UploadsRequest, res: UploadsResponse)
     return;
   }
 
-  // TEMPORARY DIAGNOSTIC - REMOVE
-const probe = req.url?.match(/[?&]probe=([A-Za-z0-9_-]{11})/)?.[1];
-  if (probe) {
-    // TEMPORARY DIAGNOSTIC - REMOVE: does the /streams tab, the one endpoint
-    // that still answers from a datacenter IP, carry any usable time?
-    const tab = await fetchText(STREAMS_TAB);
-    const raw = tab?.match(/var ytInitialData = (\{.*?\});<\/script>/s)?.[1];
-    const rows: unknown[] = [];
-
-    if (raw) {
-      (function walk(node: unknown): void {
-        if (!node || typeof node !== "object") return;
-        if (Array.isArray(node)) {
-          for (const item of node) walk(item);
-          return;
-        }
-        const lockup = (node as Record<string, unknown>).lockupViewModel as LockupNode | undefined;
-        if (lockup && typeof lockup.contentId === "string") {
-          const meta = lockup.metadata?.lockupMetadataViewModel;
-          for (const row of meta?.metadata?.contentMetadataViewModel?.metadataRows ?? []) {
-            const parts: string[] = [];
-            for (const part of row.metadataParts ?? []) {
-              const text = plainText(part?.text);
-              if (text) parts.push(text);
-            }
-            if (parts.length > 0) {
-              rows.push({ id: lockup.contentId ?? null, parts });
-            }
-          }
-        }
-        for (const value of Object.values(node as Record<string, unknown>)) walk(value);
-      })(JSON.parse(raw));
-    }
-
-    res.setHeader("Cache-Control", "no-store");
-    res.status(200).json({
-      tabBytes: tab?.length ?? null,
-      tabHasLiveBroadcastDetails: tab ? tab.includes("liveBroadcastDetails") : false,
-      tabHasStartTimestamp: tab ? tab.includes("startTimestamp") : false,
-      rowCount: rows.length,
-      rows,
-    });
-    return;
-  }
-
-  if (false) {
-    // TEMPORARY DIAGNOSTIC - REMOVE
-    const strategies: Record<string, unknown> = {};
-    strategies.watchPage = await readStartTime(probe);
-
-    for (const [name, client] of [
-      ["innertubeWeb", { clientName: "WEB", clientVersion: "2.20250101.00.00" }],
-      ["innertubeAndroid", { clientName: "ANDROID", clientVersion: "19.09.37", androidSdkVersion: 30 }],
-      ["innertubeIos", { clientName: "IOS", clientVersion: "19.09.3", deviceModel: "iPhone14,3" }],
-      ["innertubeTv", { clientName: "TVHTML5", clientVersion: "7.20250101.18.00" }],
-    ] as const) {
-      try {
-        const res = await fetch("https://www.youtube.com/youtubei/v1/player?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8", {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "user-agent": client.clientName === "ANDROID" ? "com.google.android.youtube/19.09.37 (Linux; U; Android 11)" : UA,
-            "accept-language": "id-ID,id;q=0.9",
-          },
-          body: JSON.stringify({ videoId: probe, context: { client }, contentCheckOk: true, racyCheckOk: true }),
-        });
-        const json = (await res.json()) as {
-          playabilityStatus?: { status?: string; reason?: string };
-          videoDetails?: { isLive?: boolean; isLiveContent?: boolean; title?: string };
-          microformat?: { playerMicroformatRenderer?: { liveBroadcastDetails?: { startTimestamp?: string } } };
-        };
-        strategies[name] = {
-          http: res.status,
-          status: json.playabilityStatus?.status ?? null,
-          reason: json.playabilityStatus?.reason ?? null,
-          title: json.videoDetails?.title ?? null,
-          isLive: json.videoDetails?.isLive ?? null,
-          isLiveContent: json.videoDetails?.isLiveContent ?? null,
-          start: json.microformat?.playerMicroformatRenderer?.liveBroadcastDetails?.startTimestamp ?? null,
-        };
-      } catch (error) {
-        strategies[name] = { error: String(error) };
-      }
-    }
-
-    res.setHeader("Cache-Control", "no-store");
-    res.status(200).json({ probe, strategies });
-    return;
-  }
 
   // Warm instance, fresh enough: answer without touching YouTube at all. While a
   // stream is running that window is ten minutes; once it ends, half an hour is
