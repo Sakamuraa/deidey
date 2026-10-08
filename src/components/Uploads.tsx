@@ -139,7 +139,9 @@ function BroadcastCard({
                   and can fall on a different day, so it is never used here. */}
               {item.startedAt && (
                 <span>
-                  Mulai{item.startedDay ? ` ${item.startedDay},` : ""} {item.startedAt}
+                  Mulai
+                  {item.startedDay ? ` ${item.startedDay}` : ""}
+                  {item.startedDate ? ` ${item.startedDate}` : ""}, {item.startedAt}
                 </span>
               )}
               {item.viewers !== null && (

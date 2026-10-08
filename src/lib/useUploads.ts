@@ -9,6 +9,8 @@ export type Upload = {
   /** Real broadcast start in WIB, or null when the watch page was unreadable. */
   startedAt: string | null;
   startedDay: string | null;
+  /** Localised date, e.g. "8 Okt 2026". Null only when startedAt is null. */
+  startedDate: string | null;
 };
 
 type ApiPayload = {
@@ -36,14 +38,14 @@ type State = {
  * snapshot cannot notice a new broadcast, which is the only thing it is for.
  */
 const SNAPSHOT: Upload[] = [
-  { videoId: "S6PD4T8H4Cw", url: "https://www.youtube.com/watch?v=S6PD4T8H4Cw", title: "『UNTIL THEN』kelanjutan setelah ketemu anak baru", live: false, viewers: null, startedAt: "08.00 WIB", startedDay: "Kamis" },
-  { videoId: "bgnGUHwGNqs", url: "https://www.youtube.com/watch?v=bgnGUHwGNqs", title: "『KuloNiku: Bowl Up !』Pinter masak bakso = menantu idaman", live: false, viewers: null, startedAt: "16.30 WIB", startedDay: "Rabu" },
-  { videoId: "XYDuOH8Q4-Y", url: "https://www.youtube.com/watch?v=XYDuOH8Q4-Y", title: "『RABUATIF』design apa ya tudayyy", live: false, viewers: null, startedAt: "08.01 WIB", startedDay: "Rabu" },
-  { videoId: "8UlKFnlvo00", url: "https://www.youtube.com/watch?v=8UlKFnlvo00", title: "『UNTIL THEN』kali ini beneran main until then", live: false, viewers: null, startedAt: "17.00 WIB", startedDay: "Selasa" },
-  { videoId: "M1ANn11KH2Q", url: "https://www.youtube.com/watch?v=M1ANn11KH2Q", title: "『PHASMOPHOBIA』nakutin atau ditakutin? ft. SilveragonAri dan RayRxyz", live: false, viewers: null, startedAt: "20.00 WIB", startedDay: "Senin" },
-  { videoId: "618FhJnhs8g", url: "https://www.youtube.com/watch?v=618FhJnhs8g", title: "『GARTIC.IO』tebak gambar apa tebak perasaan?", live: false, viewers: null, startedAt: "15.30 WIB", startedDay: "Minggu" },
-  { videoId: "It9c17pa3UY", url: "https://www.youtube.com/watch?v=It9c17pa3UY", title: "『Super Market Simulator』until then ngecrash", live: false, viewers: null, startedAt: "09.00 WIB", startedDay: "Sabtu" },
-  { videoId: "p493GuHW9HY", url: "https://www.youtube.com/watch?v=p493GuHW9HY", title: "『MORNING STREAM』Bangun Tidur Langsung Yapping", live: false, viewers: null, startedAt: "09.00 WIB", startedDay: "Jumat" },
+  { videoId: "S6PD4T8H4Cw", url: "https://www.youtube.com/watch?v=S6PD4T8H4Cw", title: "『UNTIL THEN』kelanjutan setelah ketemu anak baru", live: false, viewers: null, startedAt: "08.00 WIB", startedDay: "Kamis", startedDate: "8 Okt 2026" },
+  { videoId: "bgnGUHwGNqs", url: "https://www.youtube.com/watch?v=bgnGUHwGNqs", title: "『KuloNiku: Bowl Up !』Pinter masak bakso = menantu idaman", live: false, viewers: null, startedAt: "16.30 WIB", startedDay: "Rabu", startedDate: "7 Okt 2026" },
+  { videoId: "XYDuOH8Q4-Y", url: "https://www.youtube.com/watch?v=XYDuOH8Q4-Y", title: "『RABUATIF』design apa ya tudayyy", live: false, viewers: null, startedAt: "08.01 WIB", startedDay: "Rabu", startedDate: "7 Okt 2026" },
+  { videoId: "8UlKFnlvo00", url: "https://www.youtube.com/watch?v=8UlKFnlvo00", title: "『UNTIL THEN』kali ini beneran main until then", live: false, viewers: null, startedAt: "17.00 WIB", startedDay: "Selasa", startedDate: "6 Okt 2026" },
+  { videoId: "M1ANn11KH2Q", url: "https://www.youtube.com/watch?v=M1ANn11KH2Q", title: "『PHASMOPHOBIA』nakutin atau ditakutin? ft. SilveragonAri dan RayRxyz", live: false, viewers: null, startedAt: "20.00 WIB", startedDay: "Senin", startedDate: "5 Okt 2026" },
+  { videoId: "j533fLKIn4k", url: "https://www.youtube.com/watch?v=j533fLKIn4k", title: "『NOBAR』sapi-sapi apa yang nempel di dinding? sapidermen", live: false, viewers: null, startedAt: "16.32 WIB", startedDay: "Senin", startedDate: "5 Okt 2026" },
+  { videoId: "618FhJnhs8g", url: "https://www.youtube.com/watch?v=618FhJnhs8g", title: "『GARTIC.IO』tebak gambar apa tebak perasaan?", live: false, viewers: null, startedAt: "15.30 WIB", startedDay: "Minggu", startedDate: "4 Okt 2026" },
+  { videoId: "It9c17pa3UY", url: "https://www.youtube.com/watch?v=It9c17pa3UY", title: "『Super Market Simulator』until then ngecrash", live: false, viewers: null, startedAt: "09.00 WIB", startedDay: "Sabtu", startedDate: "3 Okt 2026" },
 ];
 
 const INITIAL: State = {

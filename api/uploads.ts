@@ -240,15 +240,30 @@ function parseStreamsTab(html: string): StreamEntry[] {
   return entries;
 }
 
-function toWib(iso: string): { day: string; time: string; date: string } {
+/**
+ * Indonesian short month, the way it is written rather than the way it is
+ * indexed: Mei not "May", Agu not "Aug", Okt not "Oct".
+ */
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+
+/**
+ * Broadcast start in WIB, as the card reads it.
+ *
+ * "Kamis 8 Okt 2026, 08.00 WIB" rather than an ISO string, because the only
+ * consumer of this is a human reading a card, and a bare "08.00" next to a
+ * relative age ("2 hari lalu") is ambiguous about which day it belongs to.
+ *
+ * The shift happens before any calendar field is read. Slicing the raw ISO
+ * instead would report the UTC date, which is the previous day for any evening
+ * WIB start past 17.00.
+ */
+function toWib(iso: string): { day: string; date: string; time: string } {
   const shifted = new Date(new Date(iso).getTime() + CHANNEL_TZ_OFFSET_HOURS * 3600 * 1000);
   const days = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 
   return {
-    // Shifted first, then sliced: a 07.00 WIB start is the previous day in UTC,
-    // so slicing the raw ISO would report the wrong calendar date.
-    date: shifted.toISOString().slice(0, 10),
     day: days[shifted.getUTCDay()],
+    date: `${shifted.getUTCDate()} ${MONTHS[shifted.getUTCMonth()]} ${shifted.getUTCFullYear()}`,
     time: `${String(shifted.getUTCHours()).padStart(2, "0")}.${String(shifted.getUTCMinutes()).padStart(2, "0")} WIB`,
   };
 }
