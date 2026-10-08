@@ -4,31 +4,45 @@
  * Serves the newest broadcasts plus live status, read fresh on every cold
  * request.
  *
- * Three findings shape this file, each verified against the live channel:
+ * What this file used to do, and why it stopped:
  *
- * 1. The RSS `published` timestamp is NOT the stream start time. It is when the
- *    archive went up, which runs 2 to 13 hours after the broadcast began and
- *    can land on a different calendar day. Measured on four videos: 2.3h, 4.2h,
- *    7.1h and 13.5h late. So it is never rendered as a start time.
+ * 1. The absolute broadcast start is `liveBroadcastDetails.startTimestamp` on
+ *    the watch page, and it is the only honest source for it. The RSS
+ *    `published` field is not: that is when the archive went up, which runs 2 to
+ *    13 hours after the broadcast began and can land on a different calendar
+ *    day. Measured on four videos: 2.3h, 4.2h, 7.1h and 13.5h late.
  *
- * 2. The real broadcast start is `liveBroadcastDetails.startTimestamp` on the
- *    watch page, and it survives on finished archives too. The only other
- *    places to look were checked and rejected: the embed page is 9x smaller but
- *    carries no liveBroadcastDetails, and the InnerTube player endpoint returns
- *    liveBroadcastDetails as null for a plain WEB client.
+ * 2. The watch page cannot be read from a serverless IP. YouTube answers with
+ *    HTTP 200 and 1.27 MB of page, but `liveBroadcastDetails` is absent and the
+ *    document trips bot detection. Verified across three hosts and six
+ *    strategies, all failing the same way:
  *
- * 3. The watch page is ~1.3 MB, and on a datacenter IP it is often not served at
- *    all: YouTube answers with the consent interstitial, HTTP 200, no
- *    `liveBroadcastDetails`. Measured in production on a cold lambda, nine
- *    parallel watch fetches returned exactly one usable page. So committed
- *    start times answer the cards that already exist, a CONSENT cookie makes a
- *    new fetch plausible at all, and the request is retried once before a card
- *    is allowed to stay blank. A start time never changes once a broadcast
- *    ends, which is what makes committing it honest rather than a shortcut.
+ *      | target                          | result                              |
+ *      |---------------------------------|-------------------------------------|
+ *      | watch page, Vercel              | 200, no liveBroadcastDetails        |
+ *      | watch page, Cloudflare Worker   | 200, no liveBroadcastDetails        |
+ *      | InnerTube WEB                   | LOGIN_REQUIRED, "confirm not a bot" |
+ *      | InnerTube TVHTML5               | LOGIN_REQUIRED, same                |
+ *      | InnerTube ANDROID / IOS         | HTTP 400                            |
+ *      | tab /streams, Vercel            | 200, parses fine                    |
  *
- * The list itself comes from the channel's /streams tab sorted newest first,
- * which is the only surface that reports live state, and reports it in the same
- * response as the list, so live detection costs zero extra requests.
+ *    A committed `KNOWN_STARTS` table covered that, at the cost of a manual row
+ *    per broadcast. It was deleted rather than kept, because a relative age
+ *    turns out to need none of it.
+ *
+ * 3. The relative age is already in the /streams metadata rows, as
+ *    "Streaming 5 jam lalu". That endpoint answers from Vercel, so the card gets
+ *    an age with zero extra requests, zero new dependencies, and nothing to
+ *    maintain by hand.
+ *
+ * The trade is explicit: this is YouTube's own label for how long ago the
+ * archive was published, which is not the same as how long ago the stream
+ * started. That is the same number YouTube shows on the channel's own grid, and
+ * the cards no longer claim to be a start time.
+ *
+ * The list comes from the /streams tab sorted newest first, the only surface
+ * that reports live state, and it reports it in the same response as the list,
+ * so live detection costs zero extra requests.
  */
 
 interface UploadsRequest {
@@ -47,38 +61,13 @@ const HANDLE = "@MizuHamzazu";
 const STREAMS_TAB = `https://www.youtube.com/${HANDLE}/streams?view=0&sort=dd&flow=grid&hl=id&gl=ID`;
 
 const UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko, Chrome/131.0.0.0 Safari/537.36";
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
 const LIMIT = 8;
-/** A cold Vercel lambda booting nine 1.3 MB fetches is not a seven second job. */
 const TIMEOUT_MS = 15000;
-const CHANNEL_TZ_OFFSET_HOURS = 7; // WIB
-
-/**
- * Verified broadcast starts, read from each watch page and committed.
- *
- * A `startTimestamp` never changes once a broadcast has ended, so these are
- * facts rather than a cache, and treating them as facts is what keeps this
- * endpoint affordable. Measured from production: nine watch-page fetches on a
- * cold lambda returned exactly one usable page and eight blank times, so
- * reading every card fresh is not a plan that survives contact with a
- * datacenter IP. The known ones are answered from this table with no upstream
- * request at all; a genuinely new broadcast is the only thing that costs a
- * fetch, and then it is one.
- */
-const KNOWN_STARTS: Record<string, string> = {
-  S6PD4T8H4Cw: "2026-10-08T01:00:29+00:00",
-  bgnGUHwGNqs: "2026-10-07T09:30:30+00:00",
-  "XYDuOH8Q4-Y": "2026-10-07T01:01:02+00:00",
-  "8UlKFnlvo00": "2026-10-06T10:00:23+00:00",
-  M1ANn11KH2Q: "2026-10-05T13:00:24+00:00",
-  j533fLKIn4k: "2026-10-05T09:32:41+00:00",
-  "618FhJnhs8g": "2026-10-04T08:30:28+00:00",
-  It9c17pa3UY: "2026-10-03T02:00:46+00:00",
-  p493GuHW9HY: "2026-10-02T02:00:08+00:00",
-};
 
 const LIVE_BADGE = /LIVE_NOW|BADGE_STYLE_LIVE|"LIVE"/;
+
 /**
  * Viewer count on a running stream, e.g. "15 sedang menonton".
  *
@@ -89,9 +78,77 @@ const LIVE_BADGE = /LIVE_NOW|BADGE_STYLE_LIVE|"LIVE"/;
  */
 const VIEWERS = /([\d.,]+)\s*(?:rb|ribu)?\s+(?:sedang\s+)?(?:menonton|watching)/i;
 
-/** The ðŸ”´ prefix is the channel's own live marker; the UI renders its own badge. */
+/**
+ * The relative age, as the grid writes it.
+ *
+ * Indonesian locale puts the keyword before the age, optionally with a bullet
+ * and a "berakhir" for finished streams, and it abbreviates inconsistently:
+ * the same grid mixes "1 jam lalu" with "1 h lalu" two cards apart. Both are
+ * matched, and the unit is normalised on the way out so a card never reads
+ * "1 h lalu" next to "2 jam lalu".
+ */
+const AGE =
+  /(?:streaming\s*)?(?:berakhir\s*)?(?:·\s*)?(beberapa\s+detik|\d+\s*(?:detik|dtk|menit|mnt|jam|h|hari|hr|d|minggu|mgg|pekan|wk|bulan|bln|tahun|thn)?)\s*(?:yang\s+lalu|lalu)/i;
+
+/**
+ * Unit normalisation.
+ *
+ * "h" is hari, not jam. The grid writes jam out in full ("1 jam lalu", "18 jam
+ * lalu") and abbreviates hari to a bare "h", which reads like an English hour
+ * abbreviation and is the single easiest thing to get backwards here. Caught by
+ * checking the labels against each video's measured endTimestamp: "5 h lalu"
+ * was five days old, not five hours.
+ *
+ * Single-letter "m" is left out on purpose: it could be menit or bulan, and
+ * guessing between those two is not a trade worth making, so an unmapped unit
+ * falls through to the raw label rather than becoming a wrong number.
+ */
+const AGE_UNITS: Record<string, string> = {
+  detik: "detik",
+  dtk: "detik",
+  menit: "menit",
+  mnt: "menit",
+  jam: "jam",
+  h: "hari",
+  hari: "hari",
+  hr: "hari",
+  d: "hari",
+  minggu: "minggu",
+  mgg: "minggu",
+  pekan: "minggu",
+  wk: "minggu",
+  bulan: "bulan",
+  bln: "bulan",
+  tahun: "tahun",
+  thn: "tahun",
+};
+
+/**
+ * Normalise one age label, e.g. "1 h lalu" into "1 jam lalu".
+ *
+ * Returns null when the unit is not one this file is willing to map, so the
+ * card shows nothing rather than something that could be read as a different
+ * amount of time than YouTube meant.
+ */
+function parseAge(text: string): string | null {
+  const match = text.match(AGE);
+  if (!match) return null;
+
+  const raw = match[1].replace(/\s+/g, " ").trim();
+  if (/beberapa/i.test(raw)) return "beberapa detik lalu";
+
+  const parts = raw.match(/^(\d+)\s*(.*)$/);
+  if (!parts) return null;
+
+  const unit = AGE_UNITS[(parts[2] || "jam").toLowerCase()];
+  if (!unit) return null;
+
+  return `${parts[1]} ${unit} lalu`;
+}
+
+/** The 🔴 prefix is the channel's own live marker; the UI renders its own badge. */
 function stripLiveMarker(title: string): string {
-  return title.replace(/^ðŸ”´\s*/, "").trim();
+  return title.replace(/^🔴\s*/, "").trim();
 }
 
 async function fetchText(url: string): Promise<string | null> {
@@ -102,9 +159,6 @@ async function fetchText(url: string): Promise<string | null> {
       headers: {
         "user-agent": UA,
         "accept-language": "id-ID,id;q=0.9",
-        // Without this, a datacenter IP gets the consent interstitial instead of
-        // the page, which returns HTTP 200 and a document with no
-        // liveBroadcastDetails in it. A blank time, not an error.
         cookie: "CONSENT=YES+cb.20210328-17-p0.en+FX+100",
       },
       signal: controller.signal,
@@ -153,6 +207,7 @@ interface StreamEntry {
   title: string;
   live: boolean;
   viewers: number | null;
+  age: string | null;
   thumbnail: string | null;
 }
 
@@ -218,6 +273,9 @@ function parseStreamsTab(html: string): StreamEntry[] {
           }
         }
         const viewerLine = rowParts.find((line) => VIEWERS.test(line));
+        // The age sits in the same row as the view count, so it is read here
+        // rather than in a second pass over the node.
+        const ageLine = rowParts.find((line) => line !== viewerLine && parseAge(line));
         const sources = thumbnail?.image?.sources ?? [];
 
         entries.push({
@@ -229,6 +287,7 @@ function parseStreamsTab(html: string): StreamEntry[] {
           // absent in the first moments after a stream goes live.
           live: LIVE_BADGE.test(JSON.stringify(overlays ?? "")) || Boolean(viewerLine),
           viewers: viewerLine ? parseViewerCount(viewerLine) : null,
+          age: ageLine ? parseAge(ageLine) : null,
           thumbnail: sources[sources.length - 1]?.url ?? null,
         });
       }
@@ -238,89 +297,6 @@ function parseStreamsTab(html: string): StreamEntry[] {
   })(JSON.parse(match[1]));
 
   return entries;
-}
-
-/**
- * Indonesian short month, the way it is written rather than the way it is
- * indexed: Mei not "May", Agu not "Aug", Okt not "Oct".
- */
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
-
-/**
- * Broadcast start in WIB, as the card reads it.
- *
- * "Kamis 8 Okt 2026, 08.00 WIB" rather than an ISO string, because the only
- * consumer of this is a human reading a card, and a bare "08.00" next to a
- * relative age ("2 hari lalu") is ambiguous about which day it belongs to.
- *
- * The shift happens before any calendar field is read. Slicing the raw ISO
- * instead would report the UTC date, which is the previous day for any evening
- * WIB start past 17.00.
- */
-function toWib(iso: string): { day: string; date: string; time: string } {
-  const shifted = new Date(new Date(iso).getTime() + CHANNEL_TZ_OFFSET_HOURS * 3600 * 1000);
-  const days = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-
-  return {
-    day: days[shifted.getUTCDay()],
-    date: `${shifted.getUTCDate()} ${MONTHS[shifted.getUTCMonth()]} ${shifted.getUTCFullYear()}`,
-    time: `${String(shifted.getUTCHours()).padStart(2, "0")}.${String(shifted.getUTCMinutes()).padStart(2, "0")} WIB`,
-  };
-}
-
-/**
- * Read the true broadcast start for one video, from the watch page.
- * Returns null on any failure; the caller treats that as "no time to show".
- */
-async function readStartTime(videoId: string): Promise<string | null> {
-  const html = await fetchText(`https://www.youtube.com/watch?v=${videoId}`);
-  if (!html) return null;
-  const raw = html.match(/"liveBroadcastDetails":\{[^}]*"startTimestamp":"([^"]+)"/)?.[1];
-  return raw ?? null;
-}
-
-/**
- * Start times per videoId, kept for the life of the warm instance.
- *
- * A finished stream's start is immutable, so a week is the honest TTL rather
- * than a guess. The running stream is the exception: it is the one entry whose
- * badge and viewer row still change, and a short TTL keeps its clock honest if
- * the stream is restarted.
- */
-const startCache = new Map<string, { iso: string | null; at: number }>();
-const START_TTL_ARCHIVED_MS = 7 * 24 * 60 * 60 * 1000;
-const START_TTL_LIVE_MS = 10 * 60 * 1000;
-/**
- * A miss is not a fact about the video, it is a fact about one request, so it is
- * remembered briefly instead of for a week.
- */
-const START_TTL_NULL_MS = 5 * 60 * 1000;
-
-/**
- * Start time for one entry, cache first.
- *
- * Nine watch pages in parallel is the shape of the cost here: it is one burst
- * per cold cache window, not one per visitor.
- */
-async function resolveStart(entry: StreamEntry, attempt = 0): Promise<string | null> {
-  // A finished broadcast's start is immutable, so a committed reading wins over
-  // every cache and every fetch.
-  const known = KNOWN_STARTS[entry.videoId];
-  if (known) return known;
-
-  const hit = startCache.get(entry.videoId);
-  const ttl = entry.live ? START_TTL_LIVE_MS : START_TTL_ARCHIVED_MS;
-
-  if (hit && Date.now() - hit.at < (hit.iso === null ? START_TTL_NULL_MS : ttl)) return hit.iso;
-
-  const iso = await readStartTime(entry.videoId);
-
-  // A miss is usually one unlucky request, not a missing timestamp, so it gets
-  // exactly one more go before a card is allowed to stay blank.
-  if (iso === null && attempt === 0) return resolveStart(entry, 1);
-
-  startCache.set(entry.videoId, { iso, at: Date.now() });
-  return iso;
 }
 
 /**
@@ -345,10 +321,9 @@ export default async function handler(req: UploadsRequest, res: UploadsResponse)
     return;
   }
 
-
   // Warm instance, fresh enough: answer without touching YouTube at all. While a
-  // stream is running that window is ten minutes; once it ends, half an hour is
-  // safe and keeps the watch-page burst rare.
+  // stream is running that window is ten minutes, because that is the state a
+  // visitor is watching change. Once it ends, half an hour is safe.
   if (lastGood) {
     const ttl = lastGood.liveCount > 0 ? MEMORY_TTL_LIVE_MS : MEMORY_TTL_QUIET_MS;
 
@@ -382,29 +357,17 @@ export default async function handler(req: UploadsRequest, res: UploadsResponse)
     return;
   }
 
-  const top = streams.slice(0, LIMIT);
-  // One watch-page fetch per card, in parallel, each memoised by videoId. These
-  // are the only fields in the payload that cost a second upstream request.
-  const starts = await Promise.all(top.map((entry) => resolveStart(entry)));
-
-  const uploads = top.map((entry, index) => {
-    const startTime = starts[index] ? toWib(starts[index] as string) : null;
-
-    return {
-      videoId: entry.videoId,
-      url: `https://www.youtube.com/watch?v=${entry.videoId}`,
-      title: entry.title,
-      thumbnail: entry.thumbnail,
-      live: entry.live,
-      viewers: entry.live ? entry.viewers : null,
-      // Real broadcast start from liveBroadcastDetails, not the feed's publish
-      // time, which runs hours late and can land on a different day. Null only
-      // when the watch page itself could not be read.
-      startedAt: startTime?.time ?? null,
-      startedDay: startTime?.day ?? null,
-      startedDate: startTime?.date ?? null,
-    };
-  });
+  const uploads = streams.slice(0, LIMIT).map((entry) => ({
+    videoId: entry.videoId,
+    url: `https://www.youtube.com/watch?v=${entry.videoId}`,
+    title: entry.title,
+    thumbnail: entry.thumbnail,
+    live: entry.live,
+    viewers: entry.live ? entry.viewers : null,
+    // "5 jam lalu", as YouTube's own grid writes it. Not a start time, and the
+    // card does not present it as one.
+    age: entry.age,
+  }));
 
   const liveCount = uploads.filter((upload) => upload.live).length;
 
@@ -417,10 +380,8 @@ export default async function handler(req: UploadsRequest, res: UploadsResponse)
 
   lastGood = { payload, at: Date.now(), liveCount };
 
-  // A finished archive does not change for hours, so a quiet channel gets a
-  // long edge window and pays for those watch pages rarely. Once something is
-  // running the cache drops to five minutes, because that is the state a visitor
-  // is actually watching change.
+  // A finished archive does not change for hours, so a quiet channel gets a long
+  // edge window. Once something is running the cache drops to five minutes.
   res.setHeader(
     "Cache-Control",
     liveCount > 0
@@ -431,4 +392,4 @@ export default async function handler(req: UploadsRequest, res: UploadsResponse)
   res.status(200).json(payload);
 }
 
-export { parseStreamsTab, parseViewerCount, toWib, stripLiveMarker, readStartTime, resolveStart };
+export { parseStreamsTab, parseViewerCount, parseAge, stripLiveMarker, fetchText };

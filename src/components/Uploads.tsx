@@ -2,7 +2,7 @@ import { Broadcast, Eye, Play } from "@phosphor-icons/react";
 import { useState } from "react";
 
 import { Reveal, StaggerGroup, StaggerItem } from "@/lib/reveal";
-import { useUploads } from "@/lib/useUploads";
+import { ageLabel, useUploads } from "@/lib/useUploads";
 import type { Upload } from "@/lib/useUploads";
 
 /**
@@ -60,7 +60,7 @@ export function Uploads() {
           {source === "api"
             ? live
               ? "Dibaca langsung dari channel, disegarkan tiap lima menit selama ada yang live."
-              : "Dibaca langsung dari channel, termasuk jam mulai tiap broadcast."
+              : "Dibaca langsung dari channel, lengkap dengan usianya."
             : source === "loading"
               ? "Mengambil data terbaru."
               : "Menampilkan salinan tersimpan. Data langsung tidak tersedia."}
@@ -77,6 +77,8 @@ function BroadcastCard({
   item: Upload;
   fallbackIndex: number;
 }) {
+  const label = ageLabel(item);
+
   // Thumbnails must track the video, so the live path addresses them by
   // videoId. The bundled files are only for the snapshot path, where the order
   // is fixed and known.
@@ -132,18 +134,12 @@ function BroadcastCard({
             {item.title}
           </span>
 
-          {(item.startedAt || item.viewers !== null) && (
+          {(label || item.viewers !== null) && (
             <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-fg-subtle">
-              {/* Every card carries its real broadcast start, read from
-                  liveBroadcastDetails. The feed's publish time is hours late
-                  and can fall on a different day, so it is never used here. */}
-              {item.startedAt && (
-                <span>
-                  Mulai
-                  {item.startedDay ? ` ${item.startedDay}` : ""}
-                  {item.startedDate ? ` ${item.startedDate}` : ""}, {item.startedAt}
-                </span>
-              )}
+              {/* The channel's own relative age, "5 jam lalu". Not a start time:
+                  YouTube counts from when the archive went up, which is hours
+                  after the stream began, so the card does not claim otherwise. */}
+              {label && <span>{label}</span>}
               {item.viewers !== null && (
                 <span className="inline-flex items-center gap-1">
                   <Eye size={14} aria-hidden="true" />

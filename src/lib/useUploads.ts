@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 
 export type Upload = {
   videoId: string;
@@ -6,11 +6,17 @@ export type Upload = {
   title: string;
   live: boolean;
   viewers: number | null;
-  /** Real broadcast start in WIB, or null when the watch page was unreadable. */
-  startedAt: string | null;
-  startedDay: string | null;
-  /** Localised date, e.g. "8 Okt 2026". Null only when startedAt is null. */
-  startedDate: string | null;
+  /** "5 jam lalu", as the channel's own grid writes it. Null on the snapshot path. */
+  age: string | null;
+  /**
+   * When the age label was measured, for the bundled snapshot only.
+   *
+   * A frozen "1 jam lalu" reads as a lie tomorrow, so the snapshot keeps the
+   * label's duration in minutes and the client re-renders it against this
+   * timestamp. That is arithmetic on YouTube's own number, not a new claim.
+   */
+  ageMinutes?: number;
+  ageCapturedAt?: string;
 };
 
 type ApiPayload = {
@@ -28,25 +34,70 @@ type State = {
   error: string | null;
 };
 
+/** When the snapshot's ages were measured, so the client can keep them honest. */
+const SNAPSHOT_AT = "2026-10-08T05:49:31.714Z";
+
 /**
  * Bundled snapshot of the eight newest broadcasts, taken 2026-10-08.
  *
  * This is the fallback for a static host with no serverless runtime, and for
- * the window before the fetch resolves. The times in it are real, read from each
- * watch page's `liveBroadcastDetails.startTimestamp` and converted to WIB, so the
- * static path is not a degraded version of the live one. They are frozen: a
- * snapshot cannot notice a new broadcast, which is the only thing it is for.
+ * the window before the fetch resolves. The ages are the channel's own labels
+ * from that moment, stored as minutes so `formatAge` can advance them: a
+ * snapshot that keeps saying "1 jam lalu" a week later would be lying, and this
+ * is the only part of the page that can go stale without a server to refresh it.
  */
 const SNAPSHOT: Upload[] = [
-  { videoId: "S6PD4T8H4Cw", url: "https://www.youtube.com/watch?v=S6PD4T8H4Cw", title: "『UNTIL THEN』kelanjutan setelah ketemu anak baru", live: false, viewers: null, startedAt: "08.00 WIB", startedDay: "Kamis", startedDate: "8 Okt 2026" },
-  { videoId: "bgnGUHwGNqs", url: "https://www.youtube.com/watch?v=bgnGUHwGNqs", title: "『KuloNiku: Bowl Up !』Pinter masak bakso = menantu idaman", live: false, viewers: null, startedAt: "16.30 WIB", startedDay: "Rabu", startedDate: "7 Okt 2026" },
-  { videoId: "XYDuOH8Q4-Y", url: "https://www.youtube.com/watch?v=XYDuOH8Q4-Y", title: "『RABUATIF』design apa ya tudayyy", live: false, viewers: null, startedAt: "08.01 WIB", startedDay: "Rabu", startedDate: "7 Okt 2026" },
-  { videoId: "8UlKFnlvo00", url: "https://www.youtube.com/watch?v=8UlKFnlvo00", title: "『UNTIL THEN』kali ini beneran main until then", live: false, viewers: null, startedAt: "17.00 WIB", startedDay: "Selasa", startedDate: "6 Okt 2026" },
-  { videoId: "M1ANn11KH2Q", url: "https://www.youtube.com/watch?v=M1ANn11KH2Q", title: "『PHASMOPHOBIA』nakutin atau ditakutin? ft. SilveragonAri dan RayRxyz", live: false, viewers: null, startedAt: "20.00 WIB", startedDay: "Senin", startedDate: "5 Okt 2026" },
-  { videoId: "j533fLKIn4k", url: "https://www.youtube.com/watch?v=j533fLKIn4k", title: "『NOBAR』sapi-sapi apa yang nempel di dinding? sapidermen", live: false, viewers: null, startedAt: "16.32 WIB", startedDay: "Senin", startedDate: "5 Okt 2026" },
-  { videoId: "618FhJnhs8g", url: "https://www.youtube.com/watch?v=618FhJnhs8g", title: "『GARTIC.IO』tebak gambar apa tebak perasaan?", live: false, viewers: null, startedAt: "15.30 WIB", startedDay: "Minggu", startedDate: "4 Okt 2026" },
-  { videoId: "It9c17pa3UY", url: "https://www.youtube.com/watch?v=It9c17pa3UY", title: "『Super Market Simulator』until then ngecrash", live: false, viewers: null, startedAt: "09.00 WIB", startedDay: "Sabtu", startedDate: "3 Okt 2026" },
+  { videoId: "S6PD4T8H4Cw", url: "https://www.youtube.com/watch?v=S6PD4T8H4Cw", title: "『UNTIL THEN』kelanjutan setelah ketemu anak baru", live: false, viewers: null, age: null, ageMinutes: 60, ageCapturedAt: SNAPSHOT_AT },
+  { videoId: "bgnGUHwGNqs", url: "https://www.youtube.com/watch?v=bgnGUHwGNqs", title: "『KuloNiku: Bowl Up !』Pinter masak bakso = menantu idaman", live: false, viewers: null, age: null, ageMinutes: 1080, ageCapturedAt: SNAPSHOT_AT },
+  { videoId: "XYDuOH8Q4-Y", url: "https://www.youtube.com/watch?v=XYDuOH8Q4-Y", title: "『RABUATIF』design apa ya tudayyy", live: false, viewers: null, age: null, ageMinutes: 60, ageCapturedAt: SNAPSHOT_AT },
+  { videoId: "8UlKFnlvo00", url: "https://www.youtube.com/watch?v=8UlKFnlvo00", title: "『UNTIL THEN』kali ini beneran main until then", live: false, viewers: null, age: null, ageMinutes: 60, ageCapturedAt: SNAPSHOT_AT },
+  { videoId: "M1ANn11KH2Q", url: "https://www.youtube.com/watch?v=M1ANn11KH2Q", title: "『PHASMOPHOBIA』nakutin atau ditakutin? ft. SilveragonAri dan RayRxyz", live: false, viewers: null, age: null, ageMinutes: 120, ageCapturedAt: SNAPSHOT_AT },
+  { videoId: "j533fLKIn4k", url: "https://www.youtube.com/watch?v=j533fLKIn4k", title: "『NOBAR』sapi-sapi apa yang nempel di dinding? sapidermen", live: false, viewers: null, age: null, ageMinutes: 120, ageCapturedAt: SNAPSHOT_AT },
+  { videoId: "618FhJnhs8g", url: "https://www.youtube.com/watch?v=618FhJnhs8g", title: "『GARTIC.IO』tebak gambar apa tebak perasaan?", live: false, viewers: null, age: null, ageMinutes: 180, ageCapturedAt: SNAPSHOT_AT },
+  { videoId: "It9c17pa3UY", url: "https://www.youtube.com/watch?v=It9c17pa3UY", title: "『Super Market Simulator』until then ngecrash", live: false, viewers: null, age: null, ageMinutes: 300, ageCapturedAt: SNAPSHOT_AT },
 ];
+
+const MINUTE = 60 * 1000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+const WEEK = 7 * DAY;
+const MONTH = 30 * DAY;
+
+/**
+ * Re-render a duration as the age label the card shows.
+ *
+ * Boundaries match YouTube's own grid closely enough to read the same: it drops
+ * to days around a day, to weeks around a week, to months around a month. A
+ * value under a minute reads as "beberapa detik", which is what YouTube says for
+ * that window rather than the number zero.
+ */
+export function formatAge(totalMs: number): string {
+  if (totalMs < MINUTE) return "beberapa detik lalu";
+  if (totalMs < HOUR) return `${Math.floor(totalMs / MINUTE)} menit lalu`;
+  if (totalMs < DAY) return `${Math.floor(totalMs / HOUR)} jam lalu`;
+  if (totalMs < WEEK) return `${Math.floor(totalMs / DAY)} hari lalu`;
+  if (totalMs < MONTH) return `${Math.floor(totalMs / WEEK)} minggu lalu`;
+  return `${Math.floor(totalMs / MONTH)} bulan lalu`;
+}
+
+/**
+ * The age to render for one card, from whichever source supplied it.
+ *
+ * The API path needs no work: its label was read moments ago. The snapshot path
+ * carries minutes plus the moment they were measured, so the label advances on
+ * its own instead of ageing in place.
+ */
+export function ageLabel(upload: Upload): string | null {
+  if (upload.age) return upload.age;
+  if (upload.ageMinutes === undefined || !upload.ageCapturedAt) return null;
+
+  const elapsed = Date.now() - new Date(upload.ageCapturedAt).getTime();
+  // A clock behind the snapshot would produce a negative age, which is worse
+  // than showing nothing.
+  if (!Number.isFinite(elapsed) || elapsed < 0) return null;
+
+  return formatAge(upload.ageMinutes * MINUTE + elapsed);
+}
 
 const INITIAL: State = {
   uploads: null,
