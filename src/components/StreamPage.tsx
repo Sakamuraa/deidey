@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { ArrowSquareOut, Broadcast, ChatCircle, Eye, Play } from "@phosphor-icons/react";
+import { Archive, ArrowSquareOut, ChatCircle, Eye, Play, Spinner } from "@phosphor-icons/react";
 
 import { ActionLink } from "@/components/Action";
 import { Reveal } from "@/lib/reveal";
+import { useLiveChat } from "@/lib/useLiveChat";
+import { useYouTubePlayer } from "@/lib/useYouTubePlayer";
 import { ageLabel, useContent } from "@/lib/useContent";
 import type { ContentItem } from "@/lib/useContent";
 
@@ -18,15 +20,12 @@ import type { ContentItem } from "@/lib/useContent";
  *   a serverless IP but /embed is built for third-party use, so the one surface
  *   that is reachable is the one that matters here.
  *
- * - Chat is the other story. The live_chat endpoint itself answers, but the
- *   liveChatId it needs only appears in the watch page's player response, which
- *   is exactly what the bot wall blocks. Chat also only exists while a stream is
- *   running: an archived broadcast has none at all, which is every entry in this
- *   list right now.
- *
- * So the panel says which case it is instead of showing a chat box that silently
- * never fills. A liveChatId can be threaded in through the API later, and the
- * panel is built to take one.
+ * - Chat goes through `/api/chat`, which builds its own message cursor instead of
+ *   reusing the one in the watch page. That cursor is an invalidation token, and
+ *   posting it back returns 200 with zero messages, which reads exactly like a
+ *   quiet chat. Building one from the video and channel id returns real messages.
+ *   It still only exists while a stream is running: an archived broadcast has no
+ *   chat at all, so the panel names that case rather than showing an empty log.
  */
 export function StreamPage() {
   const { streams } = useContent();
@@ -44,9 +43,31 @@ export function StreamPage() {
 
   const item = streams.find((entry) => entry.videoId === id) ?? null;
 
+  // The chat hook lives here rather than inside the panel because the broadcast's
+  // name also comes from it: the site carries only the newest streams, so a link
+  // to an older one has no local metadata and would otherwise render as a bare
+  // "Broadcast". Fetching chat is also what reads the watch page that names it.
+  const chat = useLiveChat(id ?? "", item?.live === true);
+
+  /**
+   * Whether the video has been started, and where it has got to.
+   *
+   * The player reports this through YouTube's iframe API rather than this page
+   * tracking its own clicks, because the control the visitor presses is inside
+   * the iframe. Held here so the chat panel can wait for playback and then follow
+   * it; `useCallback` keeps the identity stable so the player's effect does not
+   * re-run on every tick.
+   */
+  const [playback, setPlayback] = useState({ started: false, currentTime: 0 });
+  const onPlayback = useCallback((next: { started: boolean; currentTime: number }) => {
+    setPlayback(next);
+  }, []);
+
+  const heading = item?.title ?? chat.title;
+
   useEffect(() => {
-    if (item) document.title = `${item.title} - Mizu Hamzazu`;
-  }, [item]);
+    if (heading) document.title = `${heading} - Mizu Hamzazu`;
+  }, [heading]);
 
   if (!id) return <Missing />;
 
@@ -64,24 +85,29 @@ export function StreamPage() {
         </Reveal>
 
         <Reveal amount={0.25} delay={0.05}>
-          <div className="mt-8 grid gap-8 lg:grid-cols-12">
+          {/* Player and chat sit side by side and end together. The heading and
+              meta row are below the pair rather than inside the left column: left
+              there they made the left column the tallest thing in the row, and the
+              chat panel, which fills its row, grew down to match them. That is why
+              it used to hang past the bottom of the video. */}
+          <div className="mt-8 grid gap-6 lg:grid-cols-12">
             <div className="lg:col-span-8">
-              <Player videoId={id} />
-
-              <h1
-                id="stream-heading"
-                className="mt-6 font-display text-2xl font-semibold leading-snug tracking-tight md:text-3xl"
-              >
-                {item?.title ?? "Broadcast"}
-              </h1>
-
-              <MetaRow item={item} />
+              <Player videoId={id} onPlayback={onPlayback} />
             </div>
 
             <div className="lg:col-span-4">
-              <ChatPanel item={item} videoId={id} />
+              <ChatPanel item={item} videoId={id} chat={chat} playback={playback} />
             </div>
           </div>
+
+          <h1
+            id="stream-heading"
+            className="mt-6 font-display text-2xl font-semibold leading-snug tracking-tight md:text-3xl"
+          >
+            {heading ?? "Broadcast"}
+          </h1>
+
+          <MetaRow item={item} />
         </Reveal>
       </div>
     </section>
@@ -115,13 +141,29 @@ function Missing() {
  * read from the live location rather than the build-time config, which would
  * break on any other host. autoplay stays off and playsinline is set, so a phone
  * does not start playing audio the visitor did not ask for.
+ *
+ * enablejsapi=1 turns on the callbacks the chat panel listens to: without it the
+ * page cannot tell whether the video is playing, nor where in the recording it
+ * has got to, and a replay chat has nothing to line itself up against.
  */
-function Player({ videoId }: { videoId: string }) {
+function Player({
+  videoId,
+  onPlayback,
+}: {
+  videoId: string;
+  onPlayback: (state: { started: boolean; currentTime: number }) => void;
+}) {
   const [origin, setOrigin] = useState("");
+  const frameRef = useRef<HTMLIFrameElement>(null);
+  const { started, currentTime } = useYouTubePlayer(frameRef);
 
   useEffect(() => {
     setOrigin(window.location.origin);
   }, []);
+
+  useEffect(() => {
+    onPlayback({ started, currentTime });
+  }, [started, currentTime, onPlayback]);
 
   if (!origin) {
     return <div className="aspect-video w-full rounded-card border border-line bg-surface" />;
@@ -130,7 +172,8 @@ function Player({ videoId }: { videoId: string }) {
   return (
     <div className="aspect-video w-full overflow-hidden rounded-card border border-line bg-cocoa">
       <iframe
-        src={`https://www.youtube.com/embed/${videoId}?origin=${encodeURIComponent(origin)}`}
+        ref={frameRef}
+        src={`https://www.youtube.com/embed/${videoId}?enablejsapi=1&origin=${encodeURIComponent(origin)}`}
         title="Pemutar broadcast Mizu Hamzazu"
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
         referrerPolicy="strict-origin-when-cross-origin"
@@ -183,54 +226,236 @@ function MetaRow({ item }: { item: ContentItem | null }) {
 /**
  * Live chat.
  *
- * Present, honest, and empty on purpose. The conditions are checked in order so
- * the panel names the actual reason rather than a generic failure: not live, no
- * id, then not readable.
+ * Reads `/api/chat`, which builds its own message cursor from the video and
+ * channel id. The cursor a watch page hands out is an invalidation token, not a
+ * message position, and posting it back returns an empty chat that is
+ * indistinguishable from a quiet one. See api/chat.ts.
+ *
+ * Two shapes arrive here. A running stream yields a rolling window of the last
+ * few minutes, polled. A finished one yields the recording, a page at a time, so
+ * the header says replay and the reader pulls further stretches in as they go.
+ * A broadcast with no chat at all is the only case that gets an explanation.
  */
-function ChatPanel({ item, videoId }: { item: ContentItem | null; videoId: string }) {
+function ChatPanel({
+  item,
+  videoId,
+  chat,
+  playback,
+}: {
+  item: ContentItem | null;
+  videoId: string;
+  chat: ReturnType<typeof useLiveChat>;
+  playback: { started: boolean; currentTime: number };
+}) {
   const isLive = item?.live === true;
+  const { messages, status, mode, more, loadingMore, loadMore } = chat;
+  const { started, currentTime } = playback;
+
+  const logRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Which messages belong on screen at this point in the recording.
+   *
+   * A replay is read against the player rather than down on its own: everything
+   * up to where the video is now is history, and the next stretch has not been
+   * said yet. Holding a window around the current position keeps the log in step
+   * with what is happening on screen instead of sitting still while the video
+   * runs on. A live stream has no fixed position, so nothing is filtered.
+   */
+  const visible = useMemo(() => {
+    if (mode !== "replay" || !started) return messages;
+    return messages.filter((m) => {
+      if (m.offsetSeconds === null) return false;
+      // A trailing window: what was just said, plus a little ahead of the playhead.
+      return m.offsetSeconds <= currentTime + 15 && m.offsetSeconds >= currentTime - 90;
+    });
+  }, [messages, mode, started, currentTime]);
+
+  // Keep the newest line in view as the list grows, the way a chat log reads.
+  useEffect(() => {
+    if (!started) return;
+    const node = logRef.current;
+    if (node) node.scrollTop = node.scrollHeight;
+  }, [visible.length, started]);
 
   return (
-    <div className="flex h-full flex-col rounded-card border border-line bg-surface">
+    // h-0 min-h-full rather than h-full. A grid row takes its height from
+    // whichever cell is tallest, so a chat panel sized by its own content would
+    // set that height itself and the row would never settle at the player's.
+    // Zeroing the contribution and then filling the row breaks the cycle.
+    <div className="flex h-0 min-h-full max-h-[70vh] flex-col overflow-hidden rounded-card border border-line bg-surface lg:max-h-none">
       <div className="flex items-center gap-2 border-b border-line px-5 py-3.5">
-        <ChatCircle size={18} aria-hidden="true" className="text-fg-muted" />
-        <h2 className="text-sm font-semibold">Live chat</h2>
-      </div>
-
-      <div className="flex flex-1 flex-col justify-center px-5 py-8 text-center">
-        {!isLive ? (
-          <>
-            <Broadcast size={22} aria-hidden="true" className="mx-auto text-fg-subtle" />
-            <p className="mt-3 text-sm leading-relaxed text-fg-muted">
-              Chat hanya ada selama stream berjalan. Broadcast ini sudah selesai,
-              jadi chatnya sudah ditutup YouTube.
-            </p>
-          </>
+        {mode === "replay" ? (
+          <Archive size={18} aria-hidden="true" className="text-fg-muted" />
         ) : (
-          <>
-            <ChatCircle size={22} aria-hidden="true" className="mx-auto text-fg-subtle" />
-            <p className="mt-3 text-sm leading-relaxed text-fg-muted">
-              Chat untuk stream ini belum bisa diambil dari server.
-            </p>
-            <p className="mt-2 text-xs leading-relaxed text-fg-subtle">
-              YouTube hanya memberi id chat di halaman watch, dan halaman itu
-              memblokir permintaan dari server. Buka di YouTube untuk ikut chat.
-            </p>
-          </>
+          <ChatCircle size={18} aria-hidden="true" className="text-fg-muted" />
         )}
-
-        <div className="mt-5">
-          <ActionLink
-            href={`https://www.youtube.com/watch?v=${videoId}`}
-            external
-            variant="quiet"
-            size="md"
-          >
-            Buka di YouTube
-            <ArrowSquareOut size={16} aria-hidden="true" />
-          </ActionLink>
-        </div>
+        <h2 className="text-sm font-semibold">{mode === "replay" ? "Replay chat" : "Live chat"}</h2>
+        {messages.length > 0 && started && (
+          <span className="ml-auto font-mono text-xs text-fg-subtle">{visible.length}</span>
+        )}
       </div>
+
+      {!started ? (
+        /* Nothing to line up against yet. A replay transcript sitting still next to
+           a paused video is a wall of text out of context, so the panel waits. */
+        <div className="flex min-h-0 flex-1 flex-col justify-center px-5 py-8 text-center">
+          <Play size={22} aria-hidden="true" className="mx-auto text-fg-subtle" weight="fill" />
+          <p className="mt-3 text-sm leading-relaxed text-fg-muted">
+            {status === "loading" ? "Membaca chat…" : "Putar videonya dulu"}
+          </p>
+          {status !== "loading" && (
+            <p className="mt-2 text-xs leading-relaxed text-fg-subtle">
+              Chat-nya muncul bareng video, mengikuti waktu Tayannya.
+            </p>
+          )}
+        </div>
+      ) : visible.length > 0 ? (
+        <div
+          id="konten-chat-log"
+          ref={logRef}
+          className="min-h-0 flex-1 overflow-y-auto px-5 py-4"
+          aria-live="polite"
+        >
+          <ul className="flex flex-col gap-3">
+            {visible.map((m) => (
+              <li key={m.id} className="flex gap-2.5">
+                {m.avatar ? (
+                  <img
+                    src={m.avatar}
+                    alt=""
+                    width={28}
+                    height={28}
+                    loading="lazy"
+                    className="mt-0.5 h-7 w-7 shrink-0 rounded-full"
+                  />
+                ) : (
+                  <span className="mt-0.5 h-7 w-7 shrink-0 rounded-full bg-peach-soft" />
+                )}
+
+                <div className="min-w-0 flex-1">
+                  <p className="flex flex-wrap items-baseline gap-x-2 text-xs">
+                    <span className="font-semibold text-fg">{m.author || "Tanpa nama"}</span>
+                    {m.badge === "member" && (
+                      <span className="rounded-full bg-peach-soft px-1.5 py-px text-[0.625rem] font-medium text-shadow">
+                        Member
+                      </span>
+                    )}
+                    {m.badge === "paid" && (
+                      <span className="rounded-full bg-peach px-1.5 py-px text-[0.625rem] font-medium text-white">
+                        Disokong
+                      </span>
+                    )}
+                    {m.at && (
+                      <time className="font-mono text-fg-subtle" dateTime={new Date(m.at).toISOString()}>
+                        {new Date(m.at).toLocaleTimeString("id-ID", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </time>
+                    )}
+                  </p>
+
+                  {/* Emoji are sent separately from the text because the channel
+                      defines its own, so they are laid out here rather than
+                      interpolated into a string. */}
+                  <p className="wrap-anywhere mt-0.5 text-sm leading-relaxed text-fg-muted">
+                    {m.body}
+                    {Object.keys(m.emojis).length > 0 && (
+                      <span className="mt-1 flex flex-wrap gap-1">
+                        {Object.entries(m.emojis).map(([name, url]) => (
+                          <img
+                            key={name}
+                            src={url}
+                            alt={name}
+                            title={name}
+                            width={20}
+                            height={20}
+                            loading="lazy"
+                            className="inline-block h-5 w-5 align-text-bottom"
+                          />
+                        ))}
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          {/* A replay is read a page at a time, so it needs a way to ask for the
+              next stretch. A live stream has nothing to page through. */}
+          {mode === "replay" && more && (
+            <div className="mt-4 border-t border-line pt-4">
+              <button
+                type="button"
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="w-full rounded-button border border-line px-4 py-2 text-sm font-medium text-fg-muted transition-colors hover:bg-peach-soft hover:text-fg disabled:cursor-progress disabled:opacity-60"
+              >
+                {loadingMore ? "Membaca…" : "Muat chat sebelumnya"}
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col justify-center px-5 py-8 text-center">
+          {mode === "replay" && messages.length > 0 ? (
+            /* The transcript is loaded but nothing falls in the window around the
+               playhead. That is the normal state wherever the video is quiet, and
+               saying so is better than showing an empty panel that looks broken. */
+            <>
+              <Archive size={22} aria-hidden="true" className="mx-auto text-fg-subtle" />
+              <p className="mt-3 text-sm leading-relaxed text-fg-muted">
+                Belum ada chat di menit ini. Kalau chat-nya ada tapi belum ikut
+                terbaca, muat lagi.
+              </p>
+            </>
+          ) : status === "loading" ? (
+            <>
+              <Spinner size={22} aria-hidden="true" className="mx-auto animate-spin text-fg-subtle" />
+              <p className="mt-3 text-sm leading-relaxed text-fg-muted">Membaca chat…</p>
+            </>
+          ) : status === "quiet" && isLive ? (
+            <>
+              <ChatCircle size={22} aria-hidden="true" className="mx-auto text-fg-subtle" />
+              <p className="mt-3 text-sm leading-relaxed text-fg-muted">
+                Stream-nya live, tapi belum ada chat di jam-jam terakhir ini.
+              </p>
+            </>
+          ) : status === "quiet" ? (
+            <>
+              <Archive size={22} aria-hidden="true" className="mx-auto text-fg-subtle" />
+              <p className="mt-3 text-sm leading-relaxed text-fg-muted">
+                Chat dari broadcast ini sudah ditutup YouTube, jadi tidak ada yang
+                bisa diputar ulang.
+              </p>
+            </>
+          ) : (
+            <>
+              <ChatCircle size={22} aria-hidden="true" className="mx-auto text-fg-subtle" />
+              <p className="mt-3 text-sm leading-relaxed text-fg-muted">
+                Chat untuk stream ini belum bisa dibaca dari server.
+              </p>
+              <p className="mt-2 text-xs leading-relaxed text-fg-subtle">
+                YouTube menutup endpoint chatnya dari server. Buka di YouTube untuk ikut chat.
+              </p>
+            </>
+          )}
+
+          <div className="mt-5">
+            <ActionLink
+              href={`https://www.youtube.com/watch?v=${videoId}`}
+              external
+              variant="quiet"
+              size="md"
+            >
+              Buka di YouTube
+              <ArrowSquareOut size={16} aria-hidden="true" />
+            </ActionLink>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -40,6 +40,7 @@ interface ChatResponse {
 
 const KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
 const LIVE_CHAT = `https://www.youtube.com/youtubei/v1/live_chat/get_live_chat?key=${KEY}`;
+const LIVE_CHAT_REPLAY = `https://www.youtube.com/youtubei/v1/live_chat/get_live_chat_replay?key=${KEY}`;
 const WATCH = "https://www.youtube.com/watch";
 
 const UA =
@@ -206,6 +207,36 @@ export function buildContinuation(
   return encodeCursor(rs(119693434, entity));
 }
 
+/**
+ * The replay cursor.
+ *
+ * Same header as the live one, but the body is smaller and carries a single
+ * position in the recording instead of five wall-clock timestamps. Field 9 is
+ * 4 rather than 1, and the chat type is written to field 14 rather than 16,
+ * which is what marks the request as a replay seek.
+ */
+export function buildReplayContinuation(
+  videoId: string,
+  channelId: string,
+  seekSeconds: number,
+): string {
+  const offset = Math.max(0, Math.floor(seekSeconds)) * 1_000_000;
+
+  const entity = [
+    ...rs(3, buildHeader(videoId, channelId)),
+    ...nm(5, offset),
+    ...nm(6, 0),
+    ...nm(7, 0),
+    ...nm(8, 0),
+    ...nm(9, 4),
+    ...rs(10, nm(4, 0)),
+    ...rs(14, nm(1, 4)),
+    ...nm(15, 0),
+  ];
+
+  return encodeCursor(rs(156074452, entity));
+}
+
 /* ------------------------------------------------------------------ *
  * Response parsing
  * ------------------------------------------------------------------ */
@@ -220,6 +251,15 @@ export interface ChatMessage {
   avatar: string | null;
   /** Milliseconds since epoch, or null when the payload carries no timestamp. */
   at: number | null;
+  /**
+   * Position in the recording, in seconds. Replay only.
+   *
+   * This is the field that lines chat up with the video: the player reports the
+   * time it is at, and the messages worth showing are the ones around that
+   * number. Null during a live stream, which has no fixed timeline to line up
+   * with, and for entries the payload does not date.
+   */
+  offsetSeconds: number | null;
   /** "member" for a membership pill, "paid" for super chat and super thanks. */
   badge: string | null;
 }
@@ -299,12 +339,49 @@ const firstThumbnail = (thumbs: Array<{ url: string; width: number }> | undefine
 };
 
 /**
- * Pull messages out of the live response.
+ * Turn one renderer into a message, or null if it is not a chat message.
  *
- * The shape that matters is
- * `continuationContents.liveChatContinuation.actions[].addChatItemAction.item`.
- * Everything else in the response is bookkeeping.
+ * Shared by both modes. The replay endpoint returns `liveChatTextMessageRenderer`
+ * under the same name as the live one, so only the path to reach it differs.
  */
+function readRenderer(
+  item: Record<string, unknown> | undefined,
+  offsetSeconds: number | null,
+): ChatMessage | null {
+  if (!item) return null;
+
+  const text = pick<Record<string, unknown>>(item, "liveChatTextMessageRenderer");
+  const paid = pick<Record<string, unknown>>(item, "liveChatPaidMessageRenderer");
+  const membership = pick<Record<string, unknown>>(item, "liveChatMembershipItemRenderer");
+
+  const renderer = text ?? paid ?? membership;
+  if (!renderer) return null;
+
+  const { body, emojis } = readRuns(pick<Run[]>(pick(renderer, "message"), "runs"));
+  // pick() returns the value, so this is already the display name and not
+  // the wrapper object around it.
+  const author = pick<string>(pick(renderer, "authorName"), "simpleText") ?? "";
+
+  const usec = pick<string>(renderer, "timestampUsec");
+  const id = pick<string>(renderer, "id") ?? `${author}:${usec ?? body}`;
+
+  return {
+    id,
+    author,
+    // An emoji-only post leaves no text. Naming the emoji is honest, and it
+    // gives the card something to lay out rather than an empty row.
+    body: body.trim() || Object.keys(emojis).join(" "),
+    emojis,
+    avatar: firstThumbnail(
+      pick<Array<{ url: string; width: number }>>(pick(renderer, "authorPhoto"), "thumbnails"),
+    ),
+    at: usec ? Math.floor(Number(usec) / 1000) : null,
+    offsetSeconds,
+    badge: membership ? "member" : paid ? "paid" : null,
+  };
+}
+
+/** The live response: actions[].addChatItemAction.item.<renderer>. */
 export function parseChat(json: unknown): {
   messages: ChatMessage[];
   next: string | null;
@@ -317,37 +394,11 @@ export function parseChat(json: unknown): {
   const messages: ChatMessage[] = [];
 
   for (const action of actions) {
-    const item = pick<Record<string, unknown>>(pick(action, "addChatItemAction"), "item");
-    if (!item) continue;
-
-    const text = pick<Record<string, unknown>>(item, "liveChatTextMessageRenderer");
-    const paid = pick<Record<string, unknown>>(item, "liveChatPaidMessageRenderer");
-    const membership = pick<Record<string, unknown>>(item, "liveChatMembershipItemRenderer");
-
-    const renderer = text ?? paid ?? membership;
-    if (!renderer) continue;
-
-    const { body, emojis } = readRuns(pick<Run[]>(pick(renderer, "message"), "runs"));
-    // pick() returns the value, so this is already the display name and not
-    // the wrapper object around it.
-    const author = pick<string>(pick(renderer, "authorName"), "simpleText") ?? "";
-
-    const usec = pick<string>(renderer, "timestampUsec");
-    const id = pick<string>(renderer, "id") ?? `${author}:${usec ?? body}`;
-
-    messages.push({
-      id,
-      author,
-      // An emoji-only post leaves no text. Naming the emoji is honest, and it
-      // gives the card something to lay out rather than an empty row.
-      body: body.trim() || Object.keys(emojis).join(" "),
-      emojis,
-      avatar: firstThumbnail(
-        pick<Array<{ url: string; width: number }>>(pick(renderer, "authorPhoto"), "thumbnails"),
-      ),
-      at: usec ? Math.floor(Number(usec) / 1000) : null,
-      badge: membership ? "member" : paid ? "paid" : null,
-    });
+    const message = readRenderer(
+      pick<Record<string, unknown>>(pick(action, "addChatItemAction"), "item"),
+      null,
+    );
+    if (message) messages.push(message);
   }
 
   const continuations =
@@ -365,6 +416,60 @@ export function parseChat(json: unknown): {
   return { messages, next, timeoutMs };
 }
 
+/**
+ * The replay response: actions[].replayChatItemAction.actions[].addChatItemAction.item.
+ *
+ * One extra layer, because a replay entry wraps the message it carries rather
+ * than being one. The entry's own `videoOffsetTimeMsec` is the position in the
+ * recording and is what the next seek continues from.
+ */
+export function parseReplay(json: unknown): {
+  messages: ChatMessage[];
+  next: string | null;
+  offsetMs: number | null;
+} {
+  const continuationContents = pick<Record<string, unknown>>(json, "continuationContents");
+  const liveChat = pick<Record<string, unknown>>(continuationContents, "liveChatContinuation");
+
+  const actions = pick<Array<Record<string, unknown>>>(liveChat, "actions") ?? [];
+  const messages: ChatMessage[] = [];
+  let offsetMs: number | null = null;
+
+  for (const action of actions) {
+    const entry = pick<Record<string, unknown>>(action, "replayChatItemAction");
+    if (!entry) continue;
+
+    const at = pick<string>(entry, "videoOffsetTimeMsec");
+    if (at !== undefined) offsetMs = Number(at);
+
+    // The entry dates the group, not the individual message inside it, so every
+    // message in one entry shares that position. It is a second of resolution,
+    // which is what a reader watching the video actually needs.
+    const entrySeconds = offsetMs === null ? null : Math.floor(offsetMs / 1000);
+
+    for (const inner of pick<Array<Record<string, unknown>>>(entry, "actions") ?? []) {
+      const message = readRenderer(
+        pick<Record<string, unknown>>(pick(inner, "addChatItemAction"), "item"),
+        entrySeconds,
+      );
+      if (message) messages.push(message);
+    }
+  }
+
+  const continuations =
+    pick<Array<Record<string, unknown>>>(liveChat, "continuations") ?? [];
+  const replay = pick<Record<string, unknown>>(
+    continuations[0],
+    "liveChatReplayContinuationData",
+  );
+
+  return {
+    messages,
+    next: pick<string>(replay, "continuation") ?? null,
+    offsetMs,
+  };
+}
+
 /* ------------------------------------------------------------------ *
  * Fetching
  * ------------------------------------------------------------------ */
@@ -376,15 +481,111 @@ function clientVersion(): string {
   return `2.${stamp}.01.00`;
 }
 
-interface ChatResult {
-  messages: ChatMessage[];
-  next: string | null;
-  timeoutMs: number | null;
-  channelId: string;
+/** og:title carries HTML entities when the title contains an ampersand. */
+function decodeEntities(text: string): string {
+  return text
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
 }
 
-/** Channel id for a video. Taken from the watch page, behind the bpctr param. */
-async function readChannelId(videoId: string, signal: AbortSignal): Promise<string | null> {
+/**
+ * Brace-match the JSON object assigned after a marker.
+ *
+ * A regex cannot do this: the payload is nested and terminated by `};` in a
+ * variable that appears inside a much larger script, so the non-greedy form stops
+ * at the first closing brace it meets rather than the one that ends the object.
+ */
+function extractJson(source: string, marker: string): Record<string, unknown> | null {
+  const at = source.indexOf(marker);
+  if (at < 0) return null;
+
+  const start = source.indexOf("{", at);
+  if (start < 0) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = start; i < source.length; i++) {
+    const ch = source[i];
+
+    if (escaped) { escaped = false; continue; }
+    if (ch === "\\") { escaped = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+
+    if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) {
+        try {
+          return JSON.parse(source.slice(start, i + 1)) as Record<string, unknown>;
+        } catch {
+          return null;
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Whether the broadcast is still running, read from the player response.
+ *
+ * Matching the text of the whole page does not work, because a watch page embeds
+ * the player responses of every recommended and related video too. One of those
+ * being live is enough to make an archived broadcast look live, and the live
+ * endpoint then returns nothing for it — which is indistinguishable from a stream
+ * nobody is talking in. So the state is taken from the player response belonging
+ * to this video and nowhere else.
+ *
+ * When that response is missing the answer is false rather than a guess. Guessing
+ * true sends every archived broadcast to the live endpoint, which is the same
+ * empty result reached by a much longer route.
+ */
+function readIsLive(html: string): boolean {
+  const player = extractJson(html, "var ytInitialPlayerResponse =");
+  if (!player) return false;
+
+  const videoDetails = pick<Record<string, unknown>>(player, "videoDetails");
+  if (videoDetails?.isLive === true) return true;
+
+  const microformat = pick<Record<string, unknown>>(player, "microformat");
+  const broadcast = pick<Record<string, unknown>>(
+    pick<Record<string, unknown>>(microformat, "playerMicroformatRenderer"),
+    "liveBroadcastDetails",
+  );
+
+  return broadcast?.isLiveNow === true;
+}
+
+interface WatchFacts {
+  channelId: string;
+  title: string | null;
+  /** True while the broadcast is running, which decides replay versus live. */
+  isLive: boolean;
+  /** Length of an archived broadcast in seconds, when the page carries it. */
+  durationSeconds: number | null;
+}
+
+/**
+ * Channel id, title and broadcast state, from the watch page behind bpctr.
+ *
+ * The title rides along because the page is being read anyway. It exists so a
+ * `/konten/streams?id=` for a broadcast older than the list the site carries can
+ * still name itself, instead of rendering as a bare "Broadcast" because the
+ * metadata was never fetched.
+ *
+ * `isLive` is the reason there are two chat modes rather than one. A finished
+ * broadcast has no live chat to read, but it does have a full replay, and the
+ * two are served by different endpoints with different cursors.
+ */
+async function readWatch(videoId: string, signal: AbortSignal): Promise<WatchFacts | null> {
   // bpctr=9999999999 with has_verified=1 skips the interstitial that otherwise
   // replaces the payload with playabilityStatus LOGIN_REQUIRED.
   const res = await fetch(`${WATCH}?v=${videoId}&bpctr=9999999999&has_verified=1`, {
@@ -394,75 +595,260 @@ async function readChannelId(videoId: string, signal: AbortSignal): Promise<stri
   if (!res.ok) return null;
 
   const html = await res.text();
-  const match = html.match(/"channelId":"(.{24})"/);
-  return match ? match[1] : null;
-}
 
-async function fetchChat(videoId: string, signal: AbortSignal): Promise<ChatResult | null> {
-  const channelId = await readChannelId(videoId, signal);
+  // One parse, reused. Everything below is read out of this player response
+  // rather than the page text, because a watch page also carries the responses
+  // of every related video and a bare regex cannot tell them apart.
+  const player = extractJson(html, "var ytInitialPlayerResponse =");
+  const videoDetails = player ? pick<Record<string, unknown>>(player, "videoDetails") : null;
+
+  const channelId =
+    pick<string>(videoDetails, "channelId") ?? html.match(/"channelId":"(.{24})"/)?.[1];
   if (!channelId) return null;
 
+  // og:title is the video name; the <title> element appends " - YouTube".
+  const raw = html.match(/<meta property="og:title" content="(.*?)"/)?.[1];
+  const title = raw
+    ? decodeEntities(raw.replace(/&#(\d+);/g, (_, d) => String.fromCharCode(Number(d))))
+    : null;
+
+  return {
+    channelId,
+    title: title?.trim() || null,
+    isLive: readIsLive(html),
+    durationSeconds: numberOrNull(pick<string>(videoDetails, "lengthSeconds")),
+  };
+}
+
+/** Parse a numeric string, or null when it is absent or not a number. */
+function numberOrNull(value: string | undefined): number | null {
+  if (value === undefined) return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** InnerTube request envelope, shared by both modes. */
+function chatContext(extra: Record<string, unknown> = {}) {
+  return {
+    context: {
+      client: {
+        clientName: "WEB",
+        clientVersion: clientVersion(),
+        hl: "id",
+        gl: "ID",
+        userAgent: UA,
+      },
+    },
+    ...extra,
+  };
+}
+
+/** Live chat for a running broadcast: the rolling window plus a poll cursor. */
+async function fetchLive(
+  videoId: string,
+  channelId: string,
+  signal: AbortSignal,
+): Promise<{ messages: ChatMessage[]; next: string | null; timeoutMs: number | null } | null> {
   const res = await fetch(LIVE_CHAT, {
     method: "POST",
     headers: { "content-type": "application/json", "user-agent": UA },
     signal,
-    body: JSON.stringify({
-      context: {
-        client: {
-          clientName: "WEB",
-          clientVersion: clientVersion(),
-          hl: "id",
-          gl: "ID",
-          userAgent: UA,
-        },
-      },
-      continuation: buildContinuation(videoId, channelId),
-    }),
+    body: JSON.stringify(chatContext({ continuation: buildContinuation(videoId, channelId) })),
   });
 
   if (!res.ok) return null;
+  return parseChat(await res.json());
+}
 
-  const parsed = parseChat(await res.json());
-  return { ...parsed, channelId };
+/**
+ * Chat for a finished broadcast, read from the recording.
+ *
+ * `seekSeconds` is the position in the video to start from, so paging forward
+ * means asking for the offset the last page ended at. `cursor` short-circuits
+ * that when the caller already holds the replay continuation.
+ */
+async function fetchReplay(
+  videoId: string,
+  channelId: string,
+  seekSeconds: number,
+  cursor: string | null,
+  signal: AbortSignal,
+): Promise<{ messages: ChatMessage[]; next: string | null; offsetMs: number | null } | null> {
+  const continuation =
+    cursor ?? buildReplayContinuation(videoId, channelId, seekSeconds);
+
+  const res = await fetch(LIVE_CHAT_REPLAY, {
+    method: "POST",
+    headers: { "content-type": "application/json", "user-agent": UA },
+    signal,
+    body: JSON.stringify(
+      chatContext({
+        videoId,
+        continuation,
+        // The replay endpoint reads the seek position from here, not from the
+        // cursor, so both have to agree or it serves the wrong stretch.
+        currentPlayerState: { playerOffsetMs: String(Math.max(0, seekSeconds) * 1000) },
+      }),
+    ),
+  });
+
+  if (!res.ok) return null;
+  return parseReplay(await res.json());
+}
+
+interface ChatResult {
+  messages: ChatMessage[];
+  /** Poll cursor for live chat, or the next page's cursor for a replay. */
+  cursor: string | null;
+  /** Live chat tells the client how long to wait; a replay pages immediately. */
+  timeoutMs: number | null;
+  channelId: string;
+  title: string | null;
+  /** Which endpoint answered, so the client can word itself correctly. */
+  mode: "live" | "replay";
+  /** Whether the broadcast is still running, regardless of which mode answered. */
+  isLive: boolean;
+  /** Position in the recording this page covers, in seconds. */
+  offsetSeconds: number | null;
+  durationSeconds: number | null;
+  /** True when the recording has more chat after this page. */
+  more: boolean;
+}
+
+type Mode = "auto" | "live" | "replay";
+
+async function fetchChat(
+  videoId: string,
+  mode: Mode,
+  seekSeconds: number,
+  cursor: string | null,
+  signal: AbortSignal,
+): Promise<ChatResult | null> {
+  const watch = await readWatch(videoId, signal);
+  if (!watch) return null;
+
+  const base = {
+    channelId: watch.channelId,
+    title: watch.title,
+    isLive: watch.isLive,
+    durationSeconds: watch.durationSeconds,
+  };
+
+  // auto follows the broadcast: a running one has live chat, a finished one has
+  // a replay. An explicit mode wins, so a page can ask for the replay of a
+  // stream that is still running.
+  const useLive = mode === "live" || (mode === "auto" && watch.isLive);
+
+  if (useLive) {
+    const live = await fetchLive(videoId, watch.channelId, signal);
+    if (!live) return null;
+
+    return {
+      ...base,
+      mode: "live",
+      messages: live.messages.slice(-MESSAGE_LIMIT),
+      cursor: live.next,
+      timeoutMs: live.timeoutMs,
+      offsetSeconds: null,
+      more: false,
+    };
+  }
+
+  const replay = await fetchReplay(videoId, watch.channelId, seekSeconds, cursor, signal);
+  if (!replay) return null;
+
+  return {
+    ...base,
+    mode: "replay",
+    messages: replay.messages,
+    cursor: replay.next,
+    timeoutMs: null,
+    offsetSeconds: replay.offsetMs === null ? null : Math.floor(replay.offsetMs / 1000),
+    more: replay.next !== null,
+  };
 }
 
 /* ------------------------------------------------------------------ *
  * Handler
  * ------------------------------------------------------------------ */
 
+function readParam(query: ChatRequest["query"], key: string): string | undefined {
+  const value = query[key];
+  return Array.isArray(value) ? value[0] : value;
+}
+
+/** Read a query value as a non-negative integer, ignoring anything else. */
+function readCount(query: ChatRequest["query"], key: string, fallback: number): number {
+  const raw = readParam(query, key);
+  if (raw === undefined) return fallback;
+
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : fallback;
+}
+
 export default async function handler(req: ChatRequest, res: ChatResponse) {
-  const id = Array.isArray(req.query.id) ? req.query.id[0] : req.query.id;
-  const videoId = typeof id === "string" ? id.trim() : "";
+  const videoId = (readParam(req.query, "id") ?? "").trim();
 
   if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) {
     res.status(400).json({ reason: "bad-id", messages: [] });
     return;
   }
 
+  const requested = readParam(req.query, "mode");
+  const mode: Mode =
+    requested === "live" || requested === "replay" ? requested : "auto";
+
+  // Where to start in the recording. Paging passes the cursor it was given,
+  // which already points past the last message, and the offset keeps the
+  // request's own seek field in step with it.
+  const seekSeconds = readCount(req.query, "seek", 0);
+  const cursor = readParam(req.query, "cursor") ?? null;
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TOTAL_TIMEOUT_MS);
 
   try {
-    const result = await fetchChat(videoId, controller.signal);
+    const result = await fetchChat(videoId, mode, seekSeconds, cursor, controller.signal);
 
     if (!result) {
-      res.status(200).json({ reason: "unavailable", channelId: null, messages: [] });
+      res.status(200).json({
+        reason: "unavailable",
+        mode,
+        channelId: null,
+        title: null,
+        isLive: false,
+        messages: [],
+        cursor: null,
+        more: false,
+      });
       return;
     }
 
-    // Newest last reads like a transcript; the client flips it if it wants.
-    res.setHeader("Cache-Control", "public, s-maxage=8, stale-while-revalidate=20");
+    // A running stream changes every few seconds, so the window must stay short.
+    // A replay page never changes once recorded, and can be cached hard.
+    res.setHeader(
+      "Cache-Control",
+      result.mode === "live"
+        ? "public, s-maxage=8, stale-while-revalidate=20"
+        : "public, s-maxage=300, stale-while-revalidate=3600",
+    );
+
     res.status(200).json({
-      reason: result.messages.length > 0 ? "live" : "quiet",
-      channelId: result.channelId,
-      messages: result.messages.slice(-MESSAGE_LIMIT),
+      reason:
+        result.messages.length > 0 ? (result.mode === "live" ? "live" : "replay") : "quiet",
+      ...result,
     });
   } catch (error) {
     const aborted = error instanceof Error && error.name === "AbortError";
     res.status(200).json({
       reason: aborted ? "timeout" : "error",
+      mode,
       channelId: null,
+      title: null,
+      isLive: false,
       messages: [],
+      cursor: null,
+      more: false,
     });
   } finally {
     clearTimeout(timer);
