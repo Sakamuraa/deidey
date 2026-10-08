@@ -133,9 +133,14 @@ Belum diverifikasi: skor Lighthouse CLI, dan performa di jaringan asli.
 
 Build static ke `dist/`. Tanpa server-side, tanpa env var.
 
-**Vercel** - import repo, Vite terdeteksi otomatis.
+**Vercel** - import `Sakamuraa/mizu-hamzazu`, Vite terdeteksi otomatis.
+Build command `npm run build`, output `dist`. Publish ke `main` akan
+auto-deploy.
 **Netlify** - build `npm run build`, publish `dist`. `public/_headers` ikut
 tersalin untuk cache.
+
+Sudah diverifikasi dari clone bersih: `git clone` + `npm ci` + `npm run build`
+berhasil, `dist/` berisi 21 file (~1.8 MB, sebagian besar thumbnail).
 
 ## Stack
 
