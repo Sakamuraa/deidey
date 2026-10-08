@@ -109,83 +109,84 @@ lalu" seminggu kemudian sedang berbohong.
 
 ## Halaman
 
+Lima rute, satu bundle. Router-nya lookup tabel, bukan library: tanpa nesting,
+tanpa loader, tanpa param, jadi dependensi bakal lebih besar dari routing-nya
+sendiri.
+
 | Rute | Isi |
 |---|---|
 | `/` | Hero, Tentang, Recent Streams (24 jam), Channel |
+| `/tentang` | Tentang, versi panjang dengan glosarium hashtag |
 | `/konten` | Tiga tab: Streams, Video, Clips |
+| `/tweets` | Postingan X, terbaru lebih dulu |
+| `/channel` | Tautan kanal |
 
-`Recent Streams` di home disaring ke 24 jam terakhir, jadi blok yang biasa
-dibaca hanya satu ukuran layar. Arsip penuh ada di `/konten`.
+Tabel rute ada di `src/content/site.ts`, bukan di App, jadi nav dan router
+membaca sumber yang sama dan tidak bisa berbeda pendapat soal path mana yang
+ada. `satisfies` mengikat tiap `href` ke union `Route`, sehingga salah ketik
+jadi error kompilasi.
 
-Routing-nya satu perbandingan pathname di `src/App.tsx`, bukan library: dua
-rute, tanpa nesting, tanpa param, jadi dependensi bakal lebih besar dari
-routing-nya sendiri. `navigate()` melakukan `pushState`, yang wajib ada —
-tanpa itu address bar tetap "/", refresh balik ke home, dan tombol back
-meninggalkan situs. `vercel.json`rewrite semua path non-`/api` ke
-`index.html` supaya `/konten` bertahan setelah hard reload.
+`navigate()` melakukan `pushState`. Itu bagian yang menentukan, bukan
+`setState`: tanpa itu address bar tidak pernah berubah, refresh balik ke home,
+dan tombol back meninggalkan situs. Ketiganya pernah diuji rusak sebelum
+`pushState` ada.
+
+`vercel.json` rewrite semua path non-`/api` ke `index.html`, jadi setiap rute
+bertahan setelah hard reload.
+
+**Footer pernah punya bug tautan mati.** Di `/konten`, `#tentang` dan
+`#channel` diselesaikan terhadap halaman yang tidak punya section itu: kelihatan
+bisa diklik, tidak terjadi apa-apa. Semua href sekarang rute penuh, bertipe
+`Route`.
+
+Tiap rute punya tepat satu h1: yang di `/` ada di hero, yang di `/tentang` di
+heading halaman, `/konten` dan `/tweets` di heading masing-masing, `/channel`
+di heading section-nya. `#konten` milik `<main>` sebagai target skip link, jadi
+section yang sama memakai `#isi-*`.
 
 Tab di `/konten` memakai `role="tablist"` dengan roving tabindex, jadi panah
-kiri/kanan memindah tab, bukan Tab. `#konten` milik `<main>` sebagai
-target skip link, jadi section-nya `#isi-konten`. Tiap rute punya tepat satu
-h1: yang di `/` ada di hero, yang di `/konten` di heading halaman.
+kiri/kanan memindah tab, bukan Tab.
 
-## URL produksi
+## Tweets: tidak ada data, dan alasannya
 
-```
-https://mizuhamzazu.vtube-info.xyz
-```
+X menutup pembacaan timeline tanpa login. Dua belas rute dicoba dari IP
+serverless dan dari browser sungguhan:
 
-Subdomain sendiri, bukan sub-path, jadi Vite `base` tetap `"/"` dan semua
-referensi aset boleh `/media/...`.
-
-Nilai ini ada di empat tempat dan harus konsisten:
-
-```
-src/content/site.ts      site.url
-index.html               canonical, og:url, og:image, twitter:image, JSON-LD
-public/robots.txt        baris Sitemap
-public/sitemap.xml       <loc>
-```
-
-Kalau domainnya pindah, ganti keempatnya. Untuk aset, jangan tulis `/media/...`
-di JSX secara langsung, pakai `asset()` dari `src/lib/paths.ts`.
-
-## Mengganti konten
-
-Semua string ada di satu file: `src/content/site.ts`.
-
-1. **`site.bio`** dan **`site.credits`** - kalau deskripsi channel berubah.
-2. **`SNAPSHOT_*` di `src/lib/useContent.ts`** - salinan lokal dari ketiga
-   daftar, beserta usia tiap item dalam detik. Dipakai hanya saat
-   `/api/content` gagal atau pada host statis tanpa serverless, jadi boleh
-   lebih lama dari kondisi channel sekarang. Thumbnail-nya ada di
-   `public/media`.
-
-## Isi halaman
-
-Rute `/`:
-
-| Section | Isi |
+| Yang dicoba | Hasil |
 |---|---|
-| Nav | Avatar, 3 tautan, toggle tema, tombol YouTube + X |
-| Hero | Nama, bio, 2 CTA, avatar asli dalam frame lengkung |
-| Tentang | Kutipan bio, 3 fakta, 4 hashtag, credit karakter, 6 seri |
-| Recent Streams | Broadcast 24 jam terakhir, badge dan penonton saat live |
-| Channel | YouTube, X, Trakteer |
-| Footer | Navigasi, kanal, colophon |
+| `x.com/mizuhamzazu` (HTML) | 200, 136 kB, nol teks tweet |
+| `syndication.twitter.com` timeline-profile | 429, tiga percobaan |
+| `cdn.syndication.twimg.com` widgets/timelines | 200, nol tweet |
+| `publish.twitter.com/oembed` | 404 |
+| Guest token (activate + UserTweets) | 401 |
+| `rsshub.app` | 404 |
+| `rsshub.rssforever` | 503 |
+| `rsshub.withx` / `pseudoyu` / `feeded` | connection failed |
+| `xcancel.com` | 451 |
+| `nitter.tiekoetter.com` | 200, tapi challenge "not a bot" |
+| `nitter.tiekoetter.com` di Chromium sungguhan | tetap 0 item |
+| `nitter.poast.org` | DNS gagal |
+| `twiiit.com` | 403 |
+| `rss-bridge.org` | 500 |
 
-Rute `/konten`:
+Yang paling berbahaya adalah yang pertama: halaman profil balas 200 dengan 136 kB
+dan **nol** teks tweet, tapi grep dokumen menemukan string `full_text` dan
+`tweet_results` di dalam bundel JavaScript. Scraper yang dibangun di atas itu
+akan melaporkan sukses dan merender timeline kosong selamanya.
 
-| Section | Isi |
-|---|---|
-| Konten | Heading, 3 tab dengan jumlah item |
-| Tab Streams | 8 broadcast terbaru |
-| Tab Video | 12 upload non-broadcast |
-| Tab Clips | 12 klip dari channel lain yang menyebut namanya |
+Jadi `api/tweets.ts` membalas daftar kosong **beserta alasannya**, bukan 200 yang
+terlihat berisi. Halaman membacanya dan mengatakannya apa adanya di bawah grid,
+supaya tidak terlihat seperti akun yang belum pernah pernah ngepost.
 
-Tidak ada form kontak, tidak ada jadwal, tidak ada bento grid, tidak ada
-placeholder. Form sengaja dihapus: ini halaman fans, bukan halaman resmi.
+Card-nya dibangun dari bentuk milik situs sendiri: garis peach di kiri, font
+display untuk teksnya, dan token border serta radius yang sama dengan panel lain.
+Embed widget X akan menarik style mereka beserta banner cookie-nya, dan akan
+menampilkan login wall untuk siapa pun yang belum masuk.
 
+**Cara memperbaikinya:** token X API v2, ditaruh sebagai env var
+`X_BEARER_TOKEN` di Vercel. Parse-nya sudah ditulis terhadap payload itu, jadi
+token adalah satu-satunya perubahan yang perlu. Tanpa token, halaman menampilkan
+penjelasan dan tombol ke profilnya.
 ## Palet
 
 Dari brief:
