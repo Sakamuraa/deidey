@@ -9,9 +9,9 @@
  *   - hashtags .................. the channel description, in her order
  *   - series .................... counted from the feed titles
  *
- * The upload list is NOT here. It comes from /api/uploads at request time and
- * keeps only a bundled snapshot in src/lib/useUploads.ts, so there is one place
- * to look for broadcast data instead of two that can drift apart.
+ * The content lists are NOT here. They come from /api/content at request time
+ * and keep only a bundled snapshot in src/lib/useContent.ts, so there is one
+ * place to look for broadcast data instead of two that can drift apart.
  */
 
 export const site = {

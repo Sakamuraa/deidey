@@ -1,5 +1,5 @@
 ﻿/**
- * GET /api/uploads  ->  /api/content
+ * GET /api/content
  *
  * Serves three lists from the channel plus the search index, read fresh on every
  * cold request:
