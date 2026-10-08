@@ -59,7 +59,18 @@ export function Tweets() {
              */
             className="mt-14"
             stagger={0.04}
-            amount={0.06}
+            /*
+             * Fire on any part of the list being visible.
+             *
+             * The threshold is a fraction of this element, and in one column it is
+             * fourteen thousand pixels tall. Six percent of that is eight hundred
+             * pixels — more than the tallest viewport can show above the fold — so
+             * the observer never fired, every card sat at opacity zero, and the page
+             * rendered as an empty column. The old two-column layout was short
+             * enough to clear it, which is why the trap only appeared after the
+             * change.
+             */
+            amount={0}
           >
             {tweets.map((tweet) => (
               <StaggerItem key={tweet.id} className="mb-5 break-inside-avoid">
