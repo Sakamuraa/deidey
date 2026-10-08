@@ -47,15 +47,24 @@ export function Tweets() {
 
         {tweets.length > 0 ? (
           <StaggerGroup
-            // items-start so each card is only as tall as its own content. The
-            // default stretch is what made a text-only post sit inside a tall
-            // empty box next to a post carrying a 16:9 image.
-            className="mt-14 grid items-start gap-5 lg:grid-cols-2"
+            /*
+             * Multi-column rather than a grid.
+             *
+             * These cards are all different heights — some are one line, some carry
+             * a photo — and a grid row is as tall as its tallest card, so the short
+             * ones sat in boxes with a hole under them and the columns ended ragged.
+             * A grid cannot do better without masonry; columns pack, so each card
+             * takes exactly the room it needs and the next one starts right below it.
+             *
+             * break-inside-avoid is what stops a card being split across a column
+             * boundary, which is the whole risk with columns.
+             */
+            className="mt-14 gap-5 sm:columns-2 [column-fill:_balance]"
             stagger={0.04}
             amount={0.06}
           >
             {tweets.map((tweet) => (
-              <StaggerItem key={tweet.id} className="min-w-0">
+              <StaggerItem key={tweet.id} className="mb-5 break-inside-avoid">
                 <TweetCard tweet={tweet} />
               </StaggerItem>
             ))}
@@ -257,50 +266,48 @@ function TweetCard({ tweet }: { tweet: Tweet }) {
 
       {tweet.image && <TweetImage tweet={tweet} />}
 
-      {/* Permalink, always visible so there is a route to the post even when the
-          body carries no link of its own. */}
-      <div className="flex items-center px-6 pb-5 pt-4 text-xs text-fg-subtle">
+      {/*
+        One footer on every card, whatever it holds.
+
+        These were two rows: a permalink, and a second one that only appeared on a
+        retweet. Half the column therefore ended in a border and a link and the
+        other half in nothing, which is what made the two columns look like they
+        came from different pages. Engagement counts are still absent from the feed
+        and so stay absent rather than being printed as a confident zero.
+      */}
+      <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-1 px-6 pb-5 pt-4 text-xs text-fg-subtle">
+        {tweet.isRetweet && (
+          <span className="inline-flex items-center gap-1.5">
+            <ArrowBendUpLeft size={14} aria-hidden="true" />
+            Retweet
+          </span>
+        )}
+
+        {/* Rendered from whatever the feed carried. Nitter's RSS has no counts, so
+            this is empty today and the row shows just the permalink; it is left in
+            rather than removed so a feed that does carry them needs no change here. */}
+        {visible.map(([label, value]) => {
+          const Icon = icon[label];
+          return (
+            <span key={label} className="inline-flex items-center gap-1.5">
+              <Icon size={14} aria-hidden="true" />
+              {compact(value)}
+              <span className="sr-only">{label}</span>
+            </span>
+          );
+        })}
+
         <a
           href={tweet.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-4"
+          className="ml-auto inline-flex items-center gap-1.5 transition-colors hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-4"
         >
-          <span className="font-mono">{tweet.id}</span>
-          <ArrowSquareOut size={14} aria-hidden="true" />
-          <span className="sr-only">Buka postingan ini di X</span>
+          <span>Buka di X</span>
+          <ArrowSquareOut size={13} aria-hidden="true" />
+          <span className="sr-only">— post {tweet.id}</span>
         </a>
       </div>
-
-      {/* Footer row. mt-auto is gone along with h-full: with cards no longer
-          stretched, there is no free space to push it down. */}
-      {(visible.length > 0 || tweet.isRetweet) && (
-        <div className="flex items-center gap-5 px-6 pb-5 pt-4 text-xs text-fg-subtle">
-          {visible.map(([label, value]) => {
-            const Icon = icon[label];
-            return (
-              <span key={label} className="inline-flex items-center gap-1.5">
-                <Icon size={14} aria-hidden="true" />
-                {compact(value)}
-                <span className="sr-only">{label}</span>
-              </span>
-            );
-          })}
-
-          {tweet.isRetweet && (
-            <span className="inline-flex items-center gap-1.5">
-              <ArrowBendUpLeft size={14} aria-hidden="true" />
-              Retweet
-            </span>
-          )}
-
-          <ArrowSquareOut
-            size={14}
-            aria-hidden="true"
-            className="ml-auto transition-transform duration-200 group-hover/card:-translate-y-0.5 group-hover/card:translate-x-0.5"
-          />
-        </div>
-      )}
     </article>
   );
 }

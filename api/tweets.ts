@@ -396,9 +396,14 @@ export default async function handler(req: TweetsRequest, res: TweetsResponse) {
   };
 
   // Posts arrive irregularly, so a longer window than the content endpoint's.
+  // Short, because a post can appear at any moment and the page polls on this
+  // cadence. Held for a quarter of an hour the poll would keep re-reading the same
+  // cached copy and a new post would never surface however often it asked.
   res.setHeader(
     "Cache-Control",
-    tweets.length > 0 ? "public, s-maxage=900" : "public, s-maxage=60",
+    tweets.length > 0
+      ? "public, s-maxage=60, stale-while-revalidate=120"
+      : "public, s-maxage=30",
   );
   res.status(200).json(payload);
 }

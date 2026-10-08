@@ -69,38 +69,89 @@ const SOURCE_NOTE: Record<State["source"], string> = {
  * a page that silently showed stale posts while claiming to be live would be
  * worse than one that admits it.
  */
+/**
+ * How often to re-read the feed.
+ *
+ * X posts without warning and the visitor is already looking at the page, so
+ * fetching once on mount meant a new post simply never appeared until the page was
+ * reloaded by hand. Sixty seconds is brisk without turning a serverless function
+ * into a polling bill.
+ */
+const POLL_MS = 60_000;
+
+/** Consecutive failures before the page stops trying and says so. */
+const MAX_FAILURES = 5;
+
 export function useTweets(): State & { note: string } {
   const [state, setState] = useState<State>(EMPTY);
 
   useEffect(() => {
     const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let failures = 0;
 
-    fetch("/api/tweets", { signal: controller.signal })
-      .then(async (res) => {
+    /*
+     * Polled, not fetched once.
+     *
+     * The feed moves continuously, so a page that read it at load time and stopped
+     * would show a post that is hours old and claim nothing about the present. The
+     * request bypasses the HTTP cache as well: the endpoint's edge copy is held for
+     * a minute, and without the bypass a poll would keep re-reading that same copy
+     * and never see a new post even though it looked like it was checking.
+     *
+     * Idle while the tab is hidden, and stops for good on repeated failures rather
+     * than retrying an endpoint that is down every minute.
+     */
+    async function load() {
+      try {
+        const res = await fetch("/api/tweets", {
+          signal: controller.signal,
+          cache: "no-store",
+        });
         if (!res.ok) throw new Error(`api returned ${res.status}`);
 
         const payload = (await res.json()) as { tweets?: Tweet[]; reason?: string };
         const list = Array.isArray(payload.tweets) ? payload.tweets.slice(0, TWEET_LIMIT) : [];
 
-        // The endpoint explains itself. An empty list is reported as its stated
-        // reason rather than collapsed into one generic "unavailable", so the
-        // note under the grid says the true thing.
+        failures = 0;
         setState({
           tweets: list,
           source: list.length > 0 ? "api" : "blocked",
           error: null,
         });
-      })
-      .catch((error: unknown) => {
+      } catch (error: unknown) {
         if (controller.signal.aborted) return;
+
+        failures += 1;
         setState({
           tweets: BUNDLED,
           source: BUNDLED.length > 0 ? "bundled" : "blocked",
           error: error instanceof Error ? error.message : String(error),
         });
-      });
 
-    return () => controller.abort();
+        if (failures >= MAX_FAILURES) return;
+      }
+
+      if (!controller.signal.aborted) timer = setTimeout(load, POLL_MS);
+    }
+
+    void load();
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        if (timer) clearTimeout(timer);
+        void load();
+      } else if (timer) {
+        clearTimeout(timer);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      controller.abort();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, []);
 
   return { ...state, note: SOURCE_NOTE[state.source] };

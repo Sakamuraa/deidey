@@ -159,19 +159,51 @@ const INITIAL: State = {
  * or errors, the snapshot stays and the visitor sees a correct, slightly older
  * page with no error.
  */
+/**
+ * How often to re-read the feed.
+ *
+ * Short enough that a stream starting is noticed while someone is looking at the
+ * page, long enough not to hammer a serverless function. The endpoint's own edge
+ * cache is what this sits behind.
+ */
+const POLL_MS = 60_000;
+
 export function useContent(): State {
   const [state, setState] = useState<State>(INITIAL);
 
   useEffect(() => {
     const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let failed = false;
 
-    fetch("/api/content", { signal: controller.signal })
-      .then(async (res) => {
+    /*
+     * Re-reads on a timer rather than once.
+     *
+     * A stream starts and ends while the page is open. Fetched once on mount, the
+     * page would keep calling a finished broadcast live, or miss one that began
+     * after it loaded, until the visitor reloaded by hand. The same reasoning the
+     * endpoint caches for: a stale answer is worse here than a slightly late one,
+     * because "live" is a claim about right now.
+     *
+     * Polling stops while the tab is hidden and resumes when it comes back, so a
+     * tab left open in the background costs nothing.
+     */
+    async function load() {
+      try {
+        const res = await fetch("/api/content", {
+          signal: controller.signal,
+          // The edge holds this for minutes; without a bypass a poll would read
+          // the same cached copy it just read.
+          cache: "no-store",
+        });
         if (!res.ok) throw new Error(`api returned ${res.status}`);
+
         const payload = (await res.json()) as ApiPayload;
         if (!Array.isArray(payload.streams) || payload.streams.length === 0) {
           throw new Error("api returned no streams");
         }
+
+        failed = false;
         setState({
           streams: payload.streams,
           videos: Array.isArray(payload.videos) ? payload.videos : [],
@@ -180,9 +212,9 @@ export function useContent(): State {
           source: "api",
           error: null,
         });
-      })
-      .catch((error: unknown) => {
+      } catch (error: unknown) {
         if (controller.signal.aborted) return;
+        failed = true;
         setState({
           streams: SNAPSHOT_STREAMS,
           videos: SNAPSHOT_VIDEOS,
@@ -191,9 +223,29 @@ export function useContent(): State {
           source: "snapshot",
           error: error instanceof Error ? error.message : String(error),
         });
-      });
+      }
 
-    return () => controller.abort();
+      // Give up rather than retry a broken endpoint forever.
+      if (!failed && !controller.signal.aborted) timer = setTimeout(load, POLL_MS);
+    }
+
+    void load();
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        if (timer) clearTimeout(timer);
+        void load();
+      } else if (timer) {
+        clearTimeout(timer);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      controller.abort();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, []);
 
   return state;
