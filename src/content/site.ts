@@ -1,13 +1,17 @@
 /**
- * Every string, URL, and image on the site, sourced from the real channel.
+ * Identity strings, sourced from the real channel.
  *
  * Provenance, so nothing here has to be trusted on faith:
- *   - name, bio, hashtags ....... YouTube channel description + X profile bio
+ *   - name, bio ................. YouTube channel description + X profile bio
  *   - avatar .................... yt3.googleusercontent.com (channel avatar)
- *   - uploads ................... YouTube RSS, channel UCxpG2kuVIbbiGkbXe7Riqhw
  *   - join date ................. channel /about page, "Bergabung pada 17 Jul 2021"
+ *   - character credits ......... the creator's own X bio
+ *   - hashtags .................. the channel description, in her order
+ *   - series .................... counted from the feed titles
  *
- * To refresh: pull the RSS again and update `uploads`. Nothing else moves.
+ * The upload list is NOT here. It comes from /api/uploads at request time and
+ * keeps only a bundled snapshot in src/lib/useUploads.ts, so there is one place
+ * to look for broadcast data instead of two that can drift apart.
  */
 
 export const site = {
@@ -15,7 +19,7 @@ export const site = {
   /** Name as it appears on the channel, verbatim. */
   channelTitle: "Mizu Hamzazu Ch.",
   /** Description as published by the creator, trimmed of decoration. */
-  bio: "Mizu, salah satu putri dari kerajaan Hamzazu. Hamster princess, ID/EN VTuber, Live 2D.",
+  bio: "Hamster Princess, ID/EN VTuber. Salah satu putri dari kerajaan Hamzazu.",
   /**
    * Production origin. The site is served from its own subdomain, so the origin
    * and the site URL are the same thing. Kept in sync with index.html,
@@ -40,13 +44,13 @@ export const channels = {
     label: "YouTube",
     handle: "@MizuHamzazu",
     url: "https://www.youtube.com/@MizuHamzazu",
-    note: "Stream harian dan klip",
+    note: "Stream dan klip",
   },
   x: {
     label: "X",
     handle: "@mizuhamzazu",
     url: "https://x.com/mizuhamzazu",
-    note: "Update cepat dan pengumuman",
+    note: "Update harian",
   },
   trakteer: {
     label: "Trakteer",
@@ -56,7 +60,7 @@ export const channels = {
   },
 } as const;
 
-/** Creator's own hashtags, in the order the channel description lists them. */
+/** The creator's own hashtags, in the order the channel description lists them. */
 export const hashtags = [
   { tag: "#MizuHammu", use: "General" },
   { tag: "#Mizuislive", use: "Live" },
@@ -65,79 +69,17 @@ export const hashtags = [
 ] as const;
 
 /**
- * Eight most recent uploads, straight from the RSS feed.
- * `file` points at the thumbnail downloaded from i.ytimg.com into public/media.
- * Timestamps in the feed are UTC; `time` is already converted to WIB.
+ * Series names exactly as they appear between the brackets in the feed titles.
+ * The "kind" column is a plain reading of what the title is about, not a claim
+ * from the creator.
  */
-export const uploads = {
-  items: [
-    {
-      title: "『UNTIL THEN』kelanjutan setelah ketemu anak baru",
-      file: "/media/upload-01.jpg",
-      url: "https://www.youtube.com/watch?v=S6PD4T8H4Cw",
-      day: "Rabu",
-      time: "18.27 WIB",
-    },
-    {
-      title: "『KuloNiku: Bowl Up !』Pinter masak bakso = menantu idaman",
-      file: "/media/upload-02.jpg",
-      url: "https://www.youtube.com/watch?v=bgnGUHwGNqs",
-      day: "Kamis",
-      time: "06.33 WIB",
-    },
-    {
-      title: "『RABUATIF』design apa ya tudayyy",
-      file: "/media/upload-03.jpg",
-      url: "https://www.youtube.com/watch?v=XYDuOH8Q4-Y",
-      day: "Rabu",
-      time: "12.10 WIB",
-    },
-    {
-      title: "『UNTIL THEN』kali ini beneran main until then",
-      file: "/media/upload-04.jpg",
-      url: "https://www.youtube.com/watch?v=8UlKFnlvo00",
-      day: "Selasa",
-      time: "19.18 WIB",
-    },
-    {
-      title: "『PHASMOPHOBIA』nakutin atau ditakutin? ft. SilveragonAri dan RayRxyz",
-      file: "/media/upload-05.jpg",
-      url: "https://www.youtube.com/watch?v=M1ANn11KH2Q",
-      day: "Senin",
-      time: "22.11 WIB",
-    },
-    {
-      title: "『GARTIC.IO』tebak gambar apa tebak perasaan?",
-      file: "/media/upload-06.jpg",
-      url: "https://www.youtube.com/watch?v=618FhJnhs8g",
-      day: "Minggu",
-      time: "18.01 WIB",
-    },
-    {
-      title: "『Super Market Simulator』until then ngecrash",
-      file: "/media/upload-07.jpg",
-      url: "https://www.youtube.com/watch?v=It9c17pa3UY",
-      day: "Sabtu",
-      time: "12.13 WIB",
-    },
-    {
-      title: "『MORNING STREAM』Bangun Tidur Langsung Yapping",
-      file: "/media/upload-08.jpg",
-      url: "https://www.youtube.com/watch?v=p493GuHW9HY",
-      day: "Jumat",
-      time: "11.27 WIB",
-    },
-  ],
-} as const;
-
-/** Series the channel actually runs, counted from the feed titles. */
 export const series = [
   { name: "Until Then", kind: "Game" },
   { name: "Morning Stream", kind: "Ngobrol" },
   { name: "Phasmophobia", kind: "Game" },
   { name: "Gartic.io", kind: "Game" },
   { name: "Super Market Simulator", kind: "Game" },
-  { name: "Freethink", kind: "Ngobrol" },
+  { name: "Freetalk", kind: "Ngobrol" },
 ] as const;
 
 /**
@@ -145,12 +87,12 @@ export const series = [
  * the build came from. Kept as a footnote, not a showcase section.
  */
 export const colophon = {
-  body: "Halaman statis, tanpa backend. Komponen dari 21st.dev, aturan visual dari Taste Skill.",
+  body: "Halaman statis, tanpa CMS. Data feed diambil langsung dari channel, bukan disalin manual.",
   tools: ["React", "Vite", "Tailwind v4", "Motion"],
 } as const;
 
 export const navigation = [
   { label: "Tentang", href: "#tentang" },
   { label: "Klip", href: "#klip" },
-  { label: "Kanal", href: "#kanal" },
+  { label: "Channel", href: "#channel" },
 ] as const;

@@ -21,7 +21,7 @@ export function Footer() {
             <p className="mt-2 font-mono text-sm text-fg-muted">{channels.youtube.handle}</p>
             <p className="mt-5 max-w-[38ch] text-sm leading-relaxed text-fg-muted">
               Halaman fans, bukan halaman resmi. Semua navigasi keluar diarahkan
-              ke kanal kreatornya sendiri.
+              ke channel kreatornya sendiri.
             </p>
           </div>
 

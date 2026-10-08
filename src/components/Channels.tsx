@@ -34,7 +34,7 @@ const ROWS = [
 
 export function Channels() {
   return (
-    <section id="kanal" aria-labelledby="channels-heading" className="py-24 md:py-32">
+    <section id="channel" aria-labelledby="channels-heading" className="py-24 md:py-32">
       <div className="shell">
         <Reveal amount={0.3}>
           <h2 id="channels-heading" className="max-w-[18ch] text-3xl font-semibold leading-tight tracking-tight md:text-4xl">

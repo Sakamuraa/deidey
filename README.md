@@ -1,35 +1,74 @@
 # mizu-hamzazu
 
 Situs perkenalan **Mizu Hamzazu**, hamster princess dari kerajaan Hamzazu.
-Satu halaman statis, satu file konten, nol backend, nol data karangan.
+Satu halaman statis, satu file konten, nol CMS, nol data karangan.
 
 ```
 npm install
 npm run dev      # http://localhost:5173
 npm run build    # -> dist/
-npm run preview  # cek hasil build
+npm run preview  # cek hasil build, tanpa /api
 npm run lint
 ```
+
+> `npm run dev` **tidak** melayani `/api/uploads`. Itu serverless function milik
+> Vercel, bukan route Vite. Untuk mencoba jalur live secara lokal pakai
+> `vercel dev`.
 
 ## Sumber data
 
 Tidak ada deskripsi, gambar, avatar, atau tautan yang dikarang. Semuanya
-ditarik dari kanal aslinya:
+ditarik dari kanal aslinya, langsung saat build server:
 
 | Data | Sumber |
 |---|---|
 | Nama kanal, bio, hashtag | Deskripsi channel YouTube |
 | Avatar | `yt3.googleusercontent.com`, avatar resmi channel |
 | Credits karakter (L2D, Rig) | Bio profil X, milik kreator sendiri |
-| 8 upload terbaru | RSS feed `UCxpG2kuVIbbiGkbXe7Riqhw` |
-| Thumbnail | `i.ytimg.com/vi/<id>/maxresdefault.jpg`, diunduh ke `public/media` |
-| Tanggal dan jam | `published` di feed, dikonversi UTC ke WIB |
-| Seri yang dijalankan | Dihitung dari judul feed, bukan ditebak |
+| 8 broadcast terbaru | `/streams?view=0&sort=dd`, dibaca tiap request |
+| Status live | Badge `LIVE` di kartu broadcast |
+| Jumlah penonton | Baris "N sedang menonton" di kartu live |
+| Jam mulai (hanya kartu live) | `liveBroadcastDetails.startTimestamp` |
+| Thumbnail | `i.ytimg.com/vi/<id>/maxresdefault.jpg`, dari `videoId` |
+| Seri yang dijalankan | Dihitung dari judul, bukan ditebak |
 | Tautan YouTube / X / Trakteer | Dari handle dan deskripsi channel |
 
 X hanya bisa dibaca lewat `og:` meta tag, jadi yang terambil adalah nama,
 handle, bio, dan avatar. Jumlah pengikut tidak bisa diambil tanpa login, jadi
 tidak ditampilkan.
+
+## Upload live
+
+Kartu-kartu broadcast diambil server-side supaya halaman tetap statis di sisi
+klien. `api/uploads.ts` adalah satu-satunya serverless function di repo.
+
+```
+GET /api/uploads
+```
+
+Sumbernya `https://www.youtube.com/@MizuHamzazu/streams?view=0&sort=dd`, lalu
+di-parse dari `lockupViewModel`. Dua hal yang perlu diketahui:
+
+- **RSS bukan pilihan.** `youtube.com/feeds/videos.xml` sempat 404 dan kena
+  rate limit lintas channel dari IP yang sama, jadi `./streams` yang dipakai
+  sebagai sumber utama.
+- **Jam bukan dari feed.** `published` di feed cuma waktu publish, bukan waktu
+  mulai stream; selisihnya terukur 2,3 sampai 13,5 jam. Jam hanya ditampilkan
+  untuk stream yang sedang live, dan diambil dari
+  `liveBroadcastDetails.startTimestamp` di halaman watch. Feed hanya dibaca
+  saat ada badge `LIVE`, jadi request kedua itu jarang terjadi.
+
+Kartu non-live sengaja tidak menampilkan jam sama sekali, karena snapshot lokal
+tidak punya jam dan mengarang angka lebih buruk daripada tidak menampilkannya.
+
+Cache: `s-maxage=300` di edge, 10 menit di memori warm instance. Saat upstream
+gagal, function mengembalikan snapshot terakhir yang masih ada dengan header
+`stale`, bukan 500.
+
+Klien: `src/lib/useUploads.ts` memanggil endpoint itu, dan jatuh ke snapshot
+lokal di `public/media` kalau gagal, supaya section tidak pernah kosong. Thumbnail
+selalu diambil dari `videoId`, bukan dari indeks, supaya tidak tertukar gambar
+saat urutan feed berubah.
 
 ## URL produksi
 
@@ -57,8 +96,8 @@ di JSX secara langsung, pakai `asset()` dari `src/lib/paths.ts`.
 Semua string ada di satu file: `src/content/site.ts`.
 
 1. **`site.bio`** dan **`site.credits`** - kalau deskripsi channel berubah.
-2. **`uploads.items`** - ganti dengan isi feed terbaru. Jumlahnya bebas;
-   layout menanganinya sendiri.
+2. **`uploads.items`** - snapshot lokal di `public/media`. Dipakai hanya saat
+   `/api/uploads` gagal, jadi boleh lebih lama dari kondisi channel sekarang.
 
 ## Isi halaman
 
@@ -67,7 +106,7 @@ Semua string ada di satu file: `src/content/site.ts`.
 | Nav | Avatar, 3 tautan, toggle tema, tombol YouTube + X |
 | Hero | Nama, bio, 2 CTA, avatar asli dalam frame lengkung |
 | Tentang | Kutipan bio, 3 fakta, 4 hashtag, credit karakter, 6 seri |
-| Klip | 8 upload dari feed, judul dan waktu asli |
+| Klip | 8 broadcast live, badge dan penonton saat live, jam mulai asli |
 | Kanal | YouTube, X, Trakteer |
 | Footer | Navigasi, kanal, colophon |
 
@@ -150,6 +189,18 @@ Chrome headless terhadap `npm run preview`:
 - Core Web Vitals, 4G (150ms RTT, 1.6 Mbps), cold cache, viewport 390px,
   5 run: LCP median 1868ms / maks 2008ms, CLS 0. LCP element adalah avatar.
 
+`/api/uploads` dipanggil langsung (bukan lewat browser):
+
+- `status 200`, 8 entri, header cache benar.
+- Saat channel sedang live: `liveCount 1`, penonton terbaca, jam mulai
+  `08.00 WIB` dari `startTimestamp`.
+- Setelah stream selesai: `liveCount 0`, kartu badge hilang sendiri. Ini yang
+  dipakai untuk memastikan logika state-nya benar di kedua sisi transisi.
+
+End-to-end di simulator Vercel: 8 kartu, endpoint terjangkau, thumbnail cocok
+dengan `videoId`, badge dan intro ikut jumlah live dari API, dan catatan
+snapshot hanya muncul saat endpoint gagal.
+
 Belum diverifikasi: skor Lighthouse CLI, dan performa di jaringan asli.
 
 ## Berat aset
@@ -162,17 +213,19 @@ loaded, bukan di jalur kritis.
 
 ## Deploy
 
-Build static ke `dist/`. Tanpa server-side, tanpa env var.
+Build static ke `dist/`, plus satu serverless function di `api/`. Tanpa env
+var, tanpa database.
 
 **Vercel** - import `Sakamuraa/mizu-hamzazu`, Vite terdeteksi otomatis.
-Build command `npm run build`, output `dist`. Publish ke `main` akan
-auto-deploy.
+Build command `npm run build`, output `dist`, folder `api/` terbaca sebagai
+function Node. Publish ke `main` akan auto-deploy.
 
 Lalu di Settings → Domains, tambahkan `mizuhamzazu.vtube-info.xyz` sebagai
 custom domain. Kalau `*.vtube-info.xyz` sudah diarahkan ke Vercel lewat DNS
 wildcard, subdomain ini langsung nyambung tanpa langkah tambahan.
 **Netlify** - build `npm run build`, publish `dist`. `public/_headers` ikut
-tersalin untuk cache.
+tersalin untuk cache. Folder `api/` **tidak** dijalankan di sini, jadi live
+detection mati dan section jatuh ke snapshot lokal.
 
 Sudah diverifikasi dari clone bersih: `git clone` + `npm ci` + `npm run build`
 berhasil, `dist/` berisi 21 file (~1.8 MB, sebagian besar thumbnail).
