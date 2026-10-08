@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Mizu Hamzazu">
+  <rect width="64" height="64" rx="32" fill="#DCA08A" />
+  <path
+    d="M14 45V20h6.1l11.9 17.4L43.9 20H50v25h-6.2V31.3L32.4 47h-.8L20.2 31.3V45H14Z"
+    fill="#39251E"
+  />
+</svg>

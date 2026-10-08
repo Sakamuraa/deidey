@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="Mizu Hamzazu, hamster princess dari kerajaan Hamzazu">
+  <defs>
+    <radialGradient id="wash" cx="78%" cy="-8%" r="78%">
+      <stop offset="0%" stop-color="#E8B9A6" stop-opacity="0.75" />
+      <stop offset="64%" stop-color="#DCA08A" stop-opacity="0" />
+    </radialGradient>
+    <clipPath id="arch">
+      <path d="M360 250a190 190 0 0 1 380 0v330a0 0 0 0 1 0 0H360Z" />
+    </clipPath>
+  </defs>
+
+  <rect width="1200" height="630" fill="#FDF4EE" />
+  <rect width="1200" height="630" fill="url(#wash)" />
+
+  <text
+    x="80"
+    y="212"
+    fill="#A67362"
+    font-family="Karla, Segoe UI, Helvetica, Arial, sans-serif"
+    font-size="26"
+    font-weight="600"
+    letter-spacing="1"
+  >MIZU HAMZAZU CH.</text>
+
+  <text
+    x="80"
+    y="318"
+    fill="#39251E"
+    font-family="Petrona, Georgia, serif"
+    font-size="96"
+    font-weight="600"
+    letter-spacing="-2"
+  >Mizu Hamzazu</text>
+
+  <text
+    x="80"
+    y="376"
+    fill="#82594C"
+    font-family="Karla, Segoe UI, Helvetica, Arial, sans-serif"
+    font-size="28"
+  >Salah satu putri dari kerajaan Hamzazu.</text>
+
+  <g font-family="Karla, Segoe UI, Helvetica, Arial, sans-serif" font-size="24">
+    <rect x="80" y="428" width="236" height="60" rx="16" fill="#39251E" />
+    <text x="198" y="467" fill="#FDF4EE" text-anchor="middle" font-weight="600">Tonton di YouTube</text>
+
+    <rect x="332" y="428" width="176" height="60" rx="16" fill="none" stroke="#A67362" stroke-width="2" />
+    <text x="420" y="467" fill="#39251E" text-anchor="middle" font-weight="600">Ikuti di X</text>
+  </g>
+
+  <g transform="translate(800 130)">
+    <rect x="0" y="0" width="320" height="380" rx="160" fill="#DCA08A" />
+    <rect x="8" y="8" width="304" height="364" rx="152" fill="none" stroke="#A67362" stroke-width="3" />
+  </g>
+</svg>

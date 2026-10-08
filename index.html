@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="id" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#fdf4ee" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#241512" media="(prefers-color-scheme: dark)" />
+
+    <title>Mizu Hamzazu - Hamster Princess, VTuber Indonesia</title>
+    <meta
+      name="description"
+      content="Mizu Hamzazu, hamster princess dari kerajaan Hamzazu. Stream dan klip harian di YouTube, update cepat di X. ID/EN VTuber, Live 2D."
+    />
+    <meta name="author" content="Mizu Hamzazu" />
+    <link rel="canonical" href="https://mizuhamzazu.example/" />
+
+    <meta property="og:type" content="profile" />
+    <meta property="og:site_name" content="Mizu Hamzazu" />
+    <meta property="og:locale" content="id_ID" />
+    <meta property="og:title" content="Mizu Hamzazu - Hamster Princess, VTuber Indonesia" />
+    <meta
+      property="og:description"
+      content="Salas satu putri dari kerajaan Hamzazu. Stream, klip, dan meme, hampir tiap hari."
+    />
+    <meta property="og:url" content="https://mizuhamzazu.example/" />
+    <meta property="og:image" content="https://mizuhamzazu.example/og-image.svg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Mizu Hamzazu - Hamster Princess" />
+    <meta
+      name="twitter:description"
+      content="Stream, klip, dan meme, hampir tiap hari."
+    />
+    <meta name="twitter:image" content="https://mizuhamzazu.example/og-image.svg" />
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/media/avatar-x.jpg" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Person",
+        "name": "Mizu Hamzazu",
+        "alternateName": ["@MizuHamzazu", "@mizuhamzazu"],
+        "description": "Hamster princess dari kerajaan Hamzazu. ID/EN VTuber, Live 2D.",
+        "url": "https://mizuhamzazu.example/",
+        "image": "https://mizuhamzazu.example/media/avatar-youtube.jpg",
+        "sameAs": [
+          "https://www.youtube.com/@MizuHamzazu",
+          "https://x.com/mizuhamzazu",
+          "https://trakteer.id/MizuHamzazu"
+        ]
+      }
+    </script>
+
+    <script>
+      // Runs before first paint so the correct token set is already on screen.
+      // Without this, a dark-mode visitor eats one light flash on every load.
+      (function () {
+        try {
+          var stored = localStorage.getItem("mizu-theme");
+          var prefersLight = window.matchMedia("(prefers-color-scheme: light)").matches;
+          document.documentElement.dataset.theme = stored || (prefersLight ? "light" : "dark");
+        } catch (e) {
+          document.documentElement.dataset.theme = "light";
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

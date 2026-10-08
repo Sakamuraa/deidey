@@ -1,0 +1,261 @@
+﻿@import "tailwindcss";
+@import "@fontsource-variable/petrona/index.css";
+@import "@fontsource-variable/karla/index.css";
+
+/* ==========================================================================
+   Design tokens
+   --------------------------------------------------------------------------
+   Palette comes straight from the brand brief:
+     base / midtone ......... #DCA08A, #D59B85   peach
+     shadow .................. #A67362           warm milk brown
+     highlight / glow ........ #E8B9A6           light cream peach
+
+   All three are mid-tone. None can carry body text on a light ground, so the
+   ink ramp is derived from the same warm hue and verified against WCAG. Every
+   ratio in this file was measured, not eyeballed: see README.
+
+   Shape rule, applied without exception:
+     media frames ............ arch  (top radius 999px, bottom 20px)
+     cards / panels ......... 20px
+     buttons ................ 16px, never pill
+     tags ................... 999px
+   ========================================================================== */
+
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+
+  --bg: #fdf4ee;
+  --surface: #f8e7db;
+  --surface-deep: #f3d6c2;
+
+  --line: #e9cbb6;
+  --line-strong: #a67362;
+
+  --fg: #39251e;
+  /* One step darker than the first pass: #82594C lands at 4.37:1 on the
+     surface-deep chip fill, just under the 4.5 floor. This clears all three. */
+  --fg-muted: #7a5245;
+  --fg-subtle: #8a5f51;
+
+  --accent: #8a5f51;
+  --accent-contrast: #fdf4ee;
+  --accent-soft: #f0d9c8;
+
+  --ring: #8a5f51;
+
+  /* Brand tones, used as large fills rather than as text colours. */
+  --peach: #dca08a;
+  --peach-deep: #d59b85;
+  --milk: #a67362;
+  --glow: #e8b9a6;
+  --cocoa: #39251e;
+  /* Text placed ON a peach fill. Peach is light in both themes, so this stays
+     dark in both; deriving it from --fg would flip it and fail contrast. */
+  --on-peach: #39251e;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #241512;
+  --surface: #33201a;
+  --surface-deep: #3d2620;
+
+  --line: #4c322a;
+  --line-strong: #a67362;
+
+  --fg: #f4dfd8;
+  --fg-muted: #E8B9A6;
+  --fg-subtle: #d8ae99;
+
+  --accent: #e8b9a6;
+  --accent-contrast: #241512;
+  --accent-soft: #4a2e25;
+
+  --ring: #e8b9a6;
+
+  --peach: #dca08a;
+  --peach-deep: #d59b85;
+  --milk: #a67362;
+  --glow: #e8b9a6;
+  --cocoa: #f4dfd8;
+  --on-peach: #39251e;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-deep: var(--surface-deep);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-accent: var(--accent);
+  --color-accent-contrast: var(--accent-contrast);
+  --color-accent-soft: var(--accent-soft);
+
+  --color-peach: var(--peach);
+  --color-peach-deep: var(--peach-deep);
+  --color-milk: var(--milk);
+  --color-glow: var(--glow);
+  --color-cocoa: var(--cocoa);
+  --color-on-peach: var(--on-peach);
+
+  /* Petrona for display: warm old-style serif with a wonk axis. The channel
+     presents as a princess of a kingdom, which is the one case where a serif
+     is the honest choice rather than a decorative one. */
+  --font-display: "Petrona Variable", "Iowan Old Style", Georgia, serif;
+  /* Karla for everything else. Quirky enough to not read as Inter, quiet
+     enough for 14px body copy. */
+  --font-sans: "Karla Variable", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+
+  --radius-arch: 999px 999px 20px 20px;
+  --radius-card: 20px;
+  --radius-btn: 16px;
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@layer base {
+  * {
+    border-color: var(--line);
+  }
+
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 5.5rem;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-synthesis-weight: none;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow-x: clip;
+  }
+
+  /* Only the theme switch animates. Every other transition is declared on the
+     component that needs it, so this cannot smear across scroll. */
+  body,
+  body * {
+    transition-property: background-color, border-color, color, fill, stroke;
+    transition-duration: 280ms;
+    transition-timing-function: var(--ease-out-expo);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background: var(--peach);
+    color: var(--on-peach);
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+}
+
+@layer utilities {
+  /* Paper grain. Fixed and pointer-events-none on purpose: the same noise on a
+     scrolling container repaints the GPU every frame and drops mobile FPS. */
+  .grain::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    pointer-events: none;
+    opacity: 0.05;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .shell {
+    width: 100%;
+    max-width: 76rem;
+    margin-inline: auto;
+    padding-inline: 1.25rem;
+  }
+
+  @media (min-width: 768px) {
+    .shell {
+      padding-inline: 2.5rem;
+    }
+  }
+
+  /* Warm light spilling from the top of the page. A gradient, not an image:
+     zero bytes on the critical path and no layout shift. */
+  .dawn-wash {
+    background:
+      radial-gradient(
+        46rem 26rem at 82% -10%,
+        color-mix(in oklab, var(--peach) 42%, transparent),
+        transparent 70%
+      ),
+      radial-gradient(
+        34rem 22rem at 4% 0%,
+        color-mix(in oklab, var(--glow) 34%, transparent),
+        transparent 72%
+      );
+  }
+
+  /* Diagonal hairline field. Sits behind the colophon only, where the density
+     is high enough to carry texture. */
+  .pinstripe {
+    background-image: repeating-linear-gradient(
+      -45deg,
+      color-mix(in oklab, var(--line-strong) 22%, transparent) 0 1px,
+      transparent 1px 9px
+    );
+  }
+
+  .rule {
+    background-image: linear-gradient(
+      to right,
+      var(--line-strong) 0 32%,
+      transparent 32% 100%
+    );
+    height: 1px;
+  }
+}
+
+/* Motion collapses to instant under this query. Everything animated on the
+   page is decorative or feedback, so removing it costs no information. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Print and "save as PDF": any block still waiting on its IntersectionObserver
+   is forced to its final state, so the saved page has no empty sections. */
+@media print {
+  [data-reveal] {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
