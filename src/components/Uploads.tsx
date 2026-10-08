@@ -74,7 +74,9 @@ export function Uploads() {
                 key={item.videoId}
                 // Offset every second column on desktop so the pair reads as a
                 // staggered flow. Collapses to a flat single column on mobile.
-                className={index % 2 === 1 ? "sm:mt-16" : ""}
+                // min-w-0 as well: a grid track sized by min-content will not
+                // shrink below an unbreakable token without it.
+                className={`min-w-0 ${index % 2 === 1 ? "sm:mt-16" : ""}`}
               >
                 <BroadcastCard item={item} fallbackIndex={index} />
               </StaggerItem>

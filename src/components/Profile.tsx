@@ -36,7 +36,11 @@ export function Profile({ detail = false }: { detail?: boolean } = {}) {
     <section
       id={detail ? "isi-tentang" : "tentang"}
       aria-labelledby="profile-heading"
-      className={detail ? "pt-24 md:pt-32" : "py-24 md:py-32"}
+      // The standalone variant swaps the section's py- for pt- so the top gap
+      // matches the sticky nav instead of doubling up. It must keep a bottom
+      // gap: without one the last list butts straight into the footer, which is
+      // what the detail page looked like before this.
+      className={detail ? "pb-24 pt-24 md:pb-32 md:pt-32" : "py-24 md:py-32"}
     >
       <div className="shell">
         {detail && (

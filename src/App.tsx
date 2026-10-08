@@ -7,6 +7,7 @@ import { Konten } from "@/components/Konten";
 import { Nav } from "@/components/Nav";
 import { Profile } from "@/components/Profile";
 import { RevealFailsafe } from "@/components/RevealFailsafe";
+import { StreamPage } from "@/components/StreamPage";
 import { Tweets } from "@/components/Tweets";
 import { Uploads } from "@/components/Uploads";
 import { ROUTES, type Route } from "@/content/site";
@@ -18,11 +19,14 @@ import { ROUTES, type Route } from "@/content/site";
  * no nesting, no loaders, no params, so a dependency would be more machinery
  * than the routing itself.
  *
- *   /           Hero, Profile, Uploads (24h window), Channels
- *   /tentang    Profile, with the full detail this page has room for
- *   /konten     Konten, three tabs over streams, videos and clips
- *   /tweets     Tweets, newest first
- *   /channel    Channels
+ *   /                  Hero, Profile, Uploads (24h window), Channels
+ *   /tentang           Profile, with the full detail this page has room for
+ *   /konten            Broadcast list
+ *   /konten/streams    One broadcast: player and live chat
+ *   /konten/video      Uploads that are not broadcasts
+ *   /konten/clips      Clips from other channels naming her
+ *   /tweets            Recent posts
+ *   /channel           Channel links
  *
  * The route list itself is imported from content/site.ts, so the nav and the
  * router read the same table and cannot disagree about what paths exist.
@@ -96,7 +100,10 @@ export default function App() {
         ) : null}
 
         {route === "/tentang" ? <Profile detail /> : null}
-        {route === "/konten" ? <Konten /> : null}
+        {route === "/konten" ? <Konten category="streams" /> : null}
+        {route === "/konten/streams" ? <StreamPage /> : null}
+        {route === "/konten/video" ? <Konten category="videos" /> : null}
+        {route === "/konten/clips" ? <Konten category="clips" /> : null}
         {route === "/tweets" ? <Tweets /> : null}
         {route === "/channel" ? <Channels standalone /> : null}
       </main>

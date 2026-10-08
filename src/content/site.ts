@@ -66,7 +66,16 @@ export const channels = {
  * Owned here rather than in App.tsx so the nav and the router cannot disagree
  * about which paths exist. App imports the type; nothing else needs the list.
  */
-export const ROUTES = ["/", "/tentang", "/konten", "/tweets", "/channel"] as const;
+export const ROUTES = [
+  "/",
+  "/tentang",
+  "/konten",
+  "/konten/streams",
+  "/konten/video",
+  "/konten/clips",
+  "/tweets",
+  "/channel",
+] as const;
 
 export type Route = (typeof ROUTES)[number];
 

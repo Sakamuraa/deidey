@@ -117,7 +117,10 @@ sendiri.
 |---|---|
 | `/` | Hero, Tentang, Recent Streams (24 jam), Channel |
 | `/tentang` | Tentang, versi panjang dengan glosarium hashtag |
-| `/konten` | Tiga tab: Streams, Video, Clips |
+| `/konten` | Streams saja, broadcast yang sedang dan yang sudah lewat |
+| `/konten/streams?id={videoId}` | Satu broadcast: pemutar YouTube, plus panel chat |
+| `/konten/video` | Upload yang bukan broadcast |
+| `/konten/clips` | Clip dari kanal lain yang menyebut dia |
 | `/tweets` | Postingan X, terbaru lebih dulu |
 | `/channel` | Tautan kanal |
 
@@ -147,7 +150,7 @@ section yang sama memakai `#isi-*`.
 Tab di `/konten` memakai `role="tablist"` dengan roving tabindex, jadi panah
 kiri/kanan memindah tab, bukan Tab.
 
-## Tweets: tidak ada data, dan alasannya
+## Tweets: Nitter RSS, bukan HTML
 
 X menutup pembacaan timeline tanpa login. Dua belas rute dicoba dari IP
 serverless dan dari browser sungguhan:
@@ -168,25 +171,84 @@ serverless dan dari browser sungguhan:
 | `nitter.poast.org` | DNS gagal |
 | `twiiit.com` | 403 |
 | `rss-bridge.org` | 500 |
+| **`nitter.kabii.moe` + `nitter1.kabii.moe` (RSS)** | **200, 20 post nyata** |
 
 Yang paling berbahaya adalah yang pertama: halaman profil balas 200 dengan 136 kB
 dan **nol** teks tweet, tapi grep dokumen menemukan string `full_text` dan
 `tweet_results` di dalam bundel JavaScript. Scraper yang dibangun di atas itu
 akan melaporkan sukses dan merender timeline kosong selamanya.
 
-Jadi `api/tweets.ts` membalas daftar kosong **beserta alasannya**, bukan 200 yang
-terlihat berisi. Halaman membacanya dan mengatakannya apa adanya di bawah grid,
-supaya tidak terlihat seperti akun yang belum pernah pernah ngepost.
+Jalan yang dipakai sekarang adalah **RSS milik Nitter**, bukan HTML, dan dua
+instance diputar bergantian supaya satu instance yang sedang lambat tidak
+menggagalkan seluruh halaman:
+
+| instance | item |
+|---|---|
+| `nitter.kabii.moe/mizuhamzazu/rss` | 20 |
+| `nitter1.kabii.moe/mizuhamzazu/rss` | 20 |
+
+Kalau keduanya gagal, endpoint tetap membalas daftar kosong **beserta
+alasannya**, bukan 200 yang terlihat berisi. Halaman mengatakannya apa adanya di
+bawah grid, supaya tidak terlihat seperti akun yang belum pernah ngepost.
+
+Empat hal yang tidak dibawa feed, dan karena itu tidak dikarang di sini:
+
+- **like / reply / retweet / view** tidak ada di feed, jadi `null` dan baris
+  engagement di kartu dihilangkan, bukan diisi nol.
+- **URL panjang tetap penuh.** Nitter memotong `<title>` sendiri dengan
+  ellipsis, dan `...` di ujung apa pun dianggap terpotong lalu dibuang, karena
+  `description` membawa teks yang sama tanpa terpotong. Tiap URL di badan tweet
+  jadi tautan asli yang membuka tab baru.
+- **Prewrite mirror dibalik ke YouTube.** Nitter mengarahkan link video lewat
+  Piped dan Invidious, jadi `pipedapi.kavin.rocks/streams/{id}` ditulis ulang
+  jadi `youtube.com`. Dicocokkan dari label pertama host, bukan dari pola TLD,
+  karena mirror ini hidup di ratusan domain yang tidak saling berkaitan.
+- **Label `RT by` / `R to` dibuang** dari teks. Itu penanda kerja Nitter,
+  bukan tulisan Mizu. Prefix-nya dihapus server-side, tapi status retweet tetap
+  dibaca lebih dulu supaya kartu bisa menandainya sendiri.
 
 Card-nya dibangun dari bentuk milik situs sendiri: garis peach di kiri, font
 display untuk teksnya, dan token border serta radius yang sama dengan panel lain.
 Embed widget X akan menarik style mereka beserta banner cookie-nya, dan akan
 menampilkan login wall untuk siapa pun yang belum masuk.
 
-**Cara memperbaikinya:** token X API v2, ditaruh sebagai env var
-`X_BEARER_TOKEN` di Vercel. Parse-nya sudah ditulis terhadap payload itu, jadi
-token adalah satu-satunya perubahan yang perlu. Tanpa token, halaman menampilkan
-penjelasan dan tombol ke profilnya.
+## Halaman broadcast: pemutar hidup, chat tidak bisa diambil
+
+`/konten/streams?id={videoId}` memasang pemutar dari
+`youtube.com/embed/{videoId}`. Itu client-side, dan berhasil: HTTP 200 tanpa
+bot wall.
+
+Yang tidak berhasil adalah chat, dan alasannya sudah diuji, bukan ditebak:
+
+| Yang dicoba | Hasil |
+|---|---|
+| `embed` + `embed/v1` | iframe, tidak ada chat sama sekali |
+| `oEmbed` (`youtube.com/oembed`) | 400 untuk video ini |
+| `watch` polos, `watch m=1`, `m.youtube.com` | bot wall, `playabilityStatus` `LOGIN_REQUIRED` |
+| **`watch?bpctr=9999999999&has_verified=1`** | **`ytInitialPlayerResponse` penuh, tanpa bot wall** |
+| `live_chat/get_live_chat` dengan token dari halaman itu | 200, **nol action** |
+| `get_live_chat_replay` | 200, nol |
+| client `WEB_EMBEDDED_PLAYER` / `TVHTML5` / `WEB` | 400 `error` |
+
+Jadi `bpctr=9999999999` itu benar-benar menembus blokir untuk **data stream**:
+`videoDetails.isLive` dan
+`microformat.playerMicroformatRenderer.liveBroadcastDetails` terbaca,
+termasuk `isLiveNow` dan `startTimestamp` absolut. Itu yang dipakai untuk
+usia stream yang sedang berjalan.
+
+Chat-nya tetap kosong, dan penyebabnya ada di HTML yang dikembalikan:
+`liveChatRenderer.continuations` cuma berisi satu `reloadContinuationData` —
+token invalidasi, bukan token pesan. `initialDisplayState` bukan array pesan,
+melainkan string enum `"LIVE_CHAT_DISPLAY_STATE_EXPANDED"`, dan
+`liveChatTextMessageRenderer` tidak ada sama sekali di dokumen. Panel-nya juga
+sengaja belum dibuka: `showButton` = "Tampilkan chat", dan `clientMessages.tips`
+berisi "Tidak dapat terhubung ke chat."
+
+Artinya YouTube memang tidak-serving chat ke klien ini, jadi halaman chat
+menjelaskan condition itu apa adanya, bukan menampilkan panel kosong yang
+mengaku live. Kalau nanti chat bisa diambil, titik pasangnya sudah ada: satu
+`liveChatRenderer` di halaman watch, dan `StreamPage` tinggal memakainya.
+
 ## Palet
 
 Dari brief:

@@ -46,7 +46,9 @@ export function Channels({ standalone = false }: { standalone?: boolean } = {}) 
     <section
       id={standalone ? "isi-channel" : "channel"}
       aria-labelledby="channels-heading"
-      className={standalone ? "pt-24 md:pt-32" : "py-24 md:py-32"}
+      // See the note in Profile: pt- swaps the top gap only. The bottom gap has
+      // to stay, or the last channel row touches the footer.
+      className={standalone ? "pb-24 pt-24 md:pb-32 md:pt-32" : "py-24 md:py-32"}
     >
       <div className="shell">
         <Reveal amount={0.3}>

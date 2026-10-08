@@ -3,19 +3,24 @@ import { useEffect, useState } from "react";
 export type Tweet = {
   id: string;
   url: string;
-  /** Plain text, with X's own shortened URLs already expanded. */
+  /** Plain text with the HTML Nitter wraps it in removed. */
   text: string;
-  /** ISO timestamp, or null when X gave a relative age instead of a date. */
+  /** Raw ISO from the feed's pubDate, for the dateTime attribute. */
   postedAt: string | null;
-  /** Relative age as written by X, e.g. "3 jam". Null when postedAt is known. */
-  age: string | null;
+  /** Same instant in WIB, e.g. "8 Okt 2026, 11.52". */
+  postedLabel: string | null;
+  isRetweet: boolean;
+  /**
+   * Engagement counts, all null.
+   *
+   * Nitter's RSS does not carry them. They stay null rather than 0 so the card
+   * omits the row entirely instead of printing a confident zero.
+   */
   replies: number | null;
   retweets: number | null;
   likes: number | null;
   views: number | null;
-  /** True when the post has media attached, which the card marks. */
   hasMedia: boolean;
-  /** First media thumbnail, if any. */
   image: string | null;
 };
 
@@ -26,7 +31,7 @@ type State = {
    *   api        the endpoint returned posts
    *   bundled    showing a committed copy
    *   no-token   no API credential is configured
-   *   blocked    credential exists but the request was refused
+   *   blocked    the feed could not be read
    */
   source: "api" | "bundled" | "no-token" | "blocked";
   error: string | null;
@@ -50,10 +55,10 @@ const EMPTY: State = { tweets: BUNDLED, source: "bundled", error: null };
 
 /** Wording per source, so the explanation matches what actually happened. */
 const SOURCE_NOTE: Record<State["source"], string> = {
-  api: "Dibaca langsung dari X.",
-  bundled: "Menampilkan salinan tersimpan. X tidak mengizinkan pembacaan tanpa login.",
-  "no-token": "Belum ada kunci API X yang dikonfigurasi, jadi data langsung tidak bisa diambil.",
-  blocked: "X menolak permintaan dari server. Menampilkan salinan tersimpan.",
+  api: "Dibaca lewat feed publik X, diperbarui tiap lima belas menit.",
+  bundled: "Menampilkan salinan tersimpan. Feed publik sedang tidak terbaca.",
+  "no-token": "Kunci API X belum dikonfigurasi.",
+  blocked: "Feed publik sedang tidak terbaca. Menampilkan salinan tersimpan.",
 };
 
 /**
@@ -82,7 +87,7 @@ export function useTweets(): State & { note: string } {
         // note under the grid says the true thing.
         setState({
           tweets: list,
-          source: list.length > 0 ? "api" : payload.reason === "no-token" ? "no-token" : "blocked",
+          source: list.length > 0 ? "api" : "blocked",
           error: null,
         });
       })

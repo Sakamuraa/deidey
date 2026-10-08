@@ -7,66 +7,70 @@ import { ageLabel, useContent } from "@/lib/useContent";
 import type { ContentItem } from "@/lib/useContent";
 
 /**
- * The three content categories.
+ * The three content categories, and which one this page is showing.
  *
  * Streams come from the channel's /streams tab, videos from its /videos tab, and
  * clips from a search across the site for her name. None of those three surfaces
  * carries the others' content, which is why all three are read rather than one
  * list being filtered into three.
+ *
+ * They are routes rather than tabs because a tab cannot be linked to, and a
+ * stream card has to point at one specific stream. `/konten` is the streams list
+ * on its own; a stream card links to `/konten/streams?id=...`.
  */
-type TabKey = "streams" | "videos" | "clips";
+type Category = "streams" | "videos" | "clips";
 
-const TABS: Array<{
-  key: TabKey;
+const CATEGORIES: Record<Category, {
+  path: string;
   label: string;
   title: string;
   blurb: string;
   empty: string;
   icon: typeof Broadcast;
-}> = [
-  {
-    key: "streams",
+}> = {
+  streams: {
+    path: "/konten",
     label: "Streams",
     title: "Streams",
-    blurb: "Broadcast utuh dari channel, terbaru lebih dulu.",
+    blurb: "Broadcast utuh dari channel, terbaru lebih dulu. Klik salah satu untuk memutar.",
     empty: "Belum ada broadcast yang terbaca.",
     icon: Broadcast,
   },
-  {
-    key: "videos",
+  videos: {
+    path: "/konten/video",
     label: "Video",
     title: "Video",
     blurb: "Upload non-broadcast: cover, roleplay, dan lagu orisinal.",
     empty: "Belum ada video yang terbaca.",
     icon: FilmSlate,
   },
-  {
-    key: "clips",
+  clips: {
+    path: "/konten/clips",
     label: "Clips",
     title: "Clips",
     blurb: "Konten dari channel lain yang menyebut namanya, lewat judul atau deskripsi.",
     empty: "Belum ada klip yang menyebut namanya.",
     icon: Scissors,
   },
-];
+};
+
+const ORDER: Category[] = ["streams", "videos", "clips"];
 
 /**
- * Content index, one tab per category.
+ * One content category per path.
  *
- * Tabs are real buttons in a tablist rather than three links, so arrow keys and
- * screen readers treat this as the single control it is. The panel swaps in place
- * instead of navigating, which is why the tab state lives here and not in the
- * URL: there is one page, three views of it.
+ * These were tabs before, which put them in the same view. Tabs cannot be linked
+ * to, and a stream card needs to point at one specific stream, so the categories
+ * became routes. `/konten` is the streams list on its own; the other two keep
+ * their own paths.
  */
-export function Konten() {
+export function Konten({ category = "streams" }: { category?: Category }) {
   const { streams, videos, clips, live, source } = useContent();
-  const [tab, setTab] = useState<TabKey>("streams");
 
-  const active = TABS.find((entry) => entry.key === tab) ?? TABS[0];
-  const Icon = active.icon;
+  const active = CATEGORIES[category];
 
-  const items: Record<TabKey, ContentItem[]> = { streams, videos, clips };
-  const list = items[active.key];
+  const items: Record<Category, ContentItem[]> = { streams, videos, clips };
+  const list = items[category];
 
   return (
     // #konten belongs to <main>, which is what the skip link targets, so this
@@ -80,48 +84,31 @@ export function Konten() {
             id="konten-heading"
             className="text-3xl font-semibold leading-tight tracking-tight md:text-4xl"
           >
-            Konten
+            {active.title}
           </h1>
-          <p className="mt-5 max-w-[52ch] text-base leading-relaxed text-fg-muted md:text-lg">
-            Tiga kategori, semuanya dibaca dari channel dan dari pencarian YouTube
-            saat halaman dibuka.
+          <p className="mt-5 flex items-center gap-2.5 text-base leading-relaxed text-fg-muted md:text-lg">
+            <active.icon size={20} aria-hidden="true" className="shrink-0 text-fg-subtle" />
+            {active.blurb}
           </p>
         </Reveal>
 
-        {/* Tabs. aria-controls points at the one panel that exists, so the
-            relationship is announced without three dead targets. */}
+        {/* Category switcher. Real links now, not buttons: each one is its own
+            address, so it can be shared, bookmarked and crawled. */}
         <Reveal amount={0.2} delay={0.05}>
-          <div
-            role="tablist"
+          <nav
             aria-label="Kategori konten"
             className="mt-12 flex flex-wrap items-center gap-2 border-b border-line pb-4"
           >
-            {TABS.map((entry) => {
-              const selected = entry.key === tab;
-              const count = items[entry.key].length;
+            {ORDER.map((key) => {
+              const entry = CATEGORIES[key];
+              const selected = key === category;
+              const count = items[key].length;
 
               return (
-                <button
-                  key={entry.key}
-                  type="button"
-                  role="tab"
-                  id={`tab-${entry.key}`}
-                  aria-selected={selected}
-                  aria-controls="konten-panel"
-                  // Roving tab index: only the selected tab is in the tab order,
-                  // which is what lets arrow keys move between them instead of
-                  // Tab visiting all three.
-                  tabIndex={selected ? 0 : -1}
-                  onClick={() => setTab(entry.key)}
-                  onKeyDown={(event) => {
-                    if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
-                    event.preventDefault();
-
-                    const step = event.key === "ArrowRight" ? 1 : -1;
-                    const next = TABS[(TABS.indexOf(entry) + step + TABS.length) % TABS.length];
-                    setTab(next.key);
-                    document.getElementById(`tab-${next.key}`)?.focus();
-                  }}
+                <a
+                  key={key}
+                  href={entry.path}
+                  aria-current={selected ? "page" : undefined}
                   className={`inline-flex min-h-11 items-center gap-2 rounded-btn px-4 py-2 text-sm font-medium transition-colors duration-200 ${
                     selected
                       ? "bg-cocoa text-bg"
@@ -134,39 +121,25 @@ export function Konten() {
                   >
                     {count}
                   </span>
-                </button>
+                </a>
               );
             })}
-          </div>
+          </nav>
         </Reveal>
 
-        <div
-          role="tabpanel"
-          id="konten-panel"
-          aria-labelledby={`tab-${active.key}`}
-          tabIndex={0}
-          className="mt-10 focus-visible:outline-2 focus-visible:outline-offset-4"
-        >
-          <Reveal amount={0.2}>
-            <div className="flex items-center gap-2.5">
-              <Icon size={20} aria-hidden="true" className="text-fg-muted" />
-              <h3 className="font-display text-xl font-semibold tracking-tight">{active.title}</h3>
-            </div>
-            <p className="mt-2 max-w-[58ch] text-sm leading-relaxed text-fg-muted">
-              {active.blurb}
-            </p>
-          </Reveal>
-
+        <div className="mt-10">
           {list.length > 0 ? (
             <StaggerGroup
-              key={active.key}
-              className="mt-8 grid gap-x-6 gap-y-9 sm:grid-cols-2 lg:grid-cols-3"
+              key={category}
+              className="grid gap-x-6 gap-y-9 sm:grid-cols-2 lg:grid-cols-3"
               stagger={0.04}
               amount={0.06}
             >
               {list.map((item) => (
-                <StaggerItem key={item.videoId}>
-                  <ContentCard item={item} />
+                // min-w-0 so a long unbreakable token cannot stretch the track.
+                // See the note on wrap-anywhere in TweetCard.
+                <StaggerItem key={item.videoId} className="min-w-0">
+                  <ContentCard item={item} category={category} />
                 </StaggerItem>
               ))}
             </StaggerGroup>
@@ -188,11 +161,11 @@ export function Konten() {
                 : "Menampilkan salinan tersimpan. Data langsung tidak tersedia."}
           </p>
 
-          {live && tab !== "streams" ? (
+          {live && category !== "streams" ? (
             <div className="mt-8">
-<ActionLink href="/#klip" variant="quiet" size="md">
-              Lihat yang sedang live
-            </ActionLink>
+              <ActionLink href="/konten" variant="quiet" size="md">
+                Lihat yang sedang live
+              </ActionLink>
             </div>
           ) : null}
         </div>
@@ -201,11 +174,28 @@ export function Konten() {
   );
 }
 
-function ContentCard({ item }: { item: ContentItem }) {
+/**
+ * One content card.
+ *
+ * A stream links to the player page on this site; the other categories go
+ * straight out to YouTube. That split is the reason `/konten/streams?id=` exists:
+ * a broadcast has a page worth landing on, while a cover video and a clip do
+ * not.
+ */
+function ContentCard({ item, category }: { item: ContentItem; category: Category }) {
   const label = ageLabel(item);
 
+  const href =
+    category === "streams" ? `/konten/streams?id=${item.videoId}` : item.url;
+
+  const external = category !== "streams";
+
   return (
-    <a href={item.url} target="_blank" rel="noopener noreferrer" className="group block">
+    <a
+      href={href}
+      {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+      className="group block"
+    >
       <div className="relative overflow-hidden rounded-card border border-line bg-surface">
         <CardThumb item={item} />
         {item.live && (
@@ -219,7 +209,7 @@ function ContentCard({ item }: { item: ContentItem }) {
         )}
       </div>
 
-      <p className="mt-3.5 font-display text-base font-medium leading-snug tracking-tight text-fg">
+      <p className="mt-3.5 font-display text-base font-medium leading-snug tracking-tight text-fg wrap-anywhere">
         {item.title}
       </p>
 
