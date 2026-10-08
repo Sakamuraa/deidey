@@ -382,9 +382,15 @@ export default async function handler(req: TweetsRequest, res: TweetsResponse) {
     }
   }
 
-  // Newest first, sorted here rather than trusted from the feed, so a re-fetch
-  // after a failure does not depend on Nitter's ordering being stable.
-  tweets.sort((a, b) => (b.postedAt ?? "").localeCompare(a.postedAt ?? ""));
+  /*
+   * Order left exactly as the feed gave it.
+   *
+   * Sorting by pubDate here was wrong for retweets. Nitter dates a retweet with
+   * the original post's timestamp, so amplifying something from a fortnight ago
+   * pushed it below everything she posted since — the newest thing she did on the
+   * account sank down the page. The feed already orders by its own idea of recency,
+   * which knows the difference; re-sorting by a single field threw that away.
+   */
   tweets = tweets.slice(0, TWEET_LIMIT);
 
   const payload = {
