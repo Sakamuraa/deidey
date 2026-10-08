@@ -30,7 +30,13 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
  * The channel links live inside it, which is what satisfies "YouTube and X
  * reachable without scrolling on mobile".
  */
-export function Nav() {
+export function Nav({
+  route,
+  onNavigate,
+}: {
+  route: "home" | "konten";
+  onNavigate: (route: "home" | "konten") => void;
+}) {
   const [scrolled, setScrolled] = useState(false);
 
   // An IntersectionObserver sentinel instead of a scroll listener: one
@@ -60,7 +66,18 @@ export function Nav() {
       >
         <div className="shell flex h-full items-center justify-between gap-4">
           <a
-            href="#atas"
+            // Home is a separate route, so on /konten the wordmark has to leave
+            // the page rather than jump to a top anchor that is not there.
+            href={route === "home" ? "#atas" : "/"}
+            onClick={
+              route === "konten"
+                ? (event) => {
+                    event.preventDefault();
+                    onNavigate("home");
+                    window.scrollTo(0, 0);
+                  }
+                : undefined
+            }
             className="flex items-center gap-2.5 font-display text-[1.05rem] font-semibold tracking-tight"
           >
             <img
@@ -75,16 +92,39 @@ export function Nav() {
 
           <nav aria-label="Bagian halaman" className="hidden md:block">
             <ul className="flex items-center gap-7">
-              {navigation.map((item) => (
-                <li key={item.href}>
-                  <a
-                    href={item.href}
-                    className="inline-flex h-9 items-center text-sm text-fg-muted transition-colors duration-200 hover:text-fg"
-                  >
-                    {item.label}
-                  </a>
-                </li>
-              ))}
+              {navigation
+                // Section anchors belong to the home page, so they are hidden on
+                // /konten rather than rendered as links that go nowhere.
+                .filter((item) => item.scope === "all" || item.scope === route)
+                .map((item) => {
+                  // "/" is never in the list, so the only cross-page target is
+                  // /konten and the target route follows from it.
+                  const isCrossPage = item.href.startsWith("/");
+                  const current = isCrossPage && route === "konten";
+
+                  return (
+                    <li key={item.href}>
+                      <a
+                        href={item.href}
+                        aria-current={current ? "page" : undefined}
+                        onClick={
+                          isCrossPage
+                            ? (event) => {
+                                event.preventDefault();
+                                onNavigate("konten");
+                                window.scrollTo(0, 0);
+                              }
+                            : undefined
+                        }
+                        className={`inline-flex h-9 items-center text-sm transition-colors duration-200 ${
+                          current ? "text-fg" : "text-fg-muted hover:text-fg"
+                        }`}
+                      >
+                        {item.label}
+                      </a>
+                    </li>
+                  );
+                })}
             </ul>
           </nav>
 

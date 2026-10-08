@@ -91,8 +91,15 @@ export const colophon = {
   tools: ["React", "Vite", "Tailwind v4", "Motion"],
 } as const;
 
+/**
+ * Nav links.
+ *
+ * `scope` says which page a link belongs to, so the same list can render
+ * differently on each without a second array to keep in sync. A link with no
+ * scope is a section anchor on the current page.
+ */
 export const navigation = [
-  { label: "Tentang", href: "#tentang" },
-  { label: "Klip", href: "#klip" },
-  { label: "Channel", href: "#channel" },
+  { label: "Tentang", href: "#tentang", scope: "home" },
+  { label: "Konten", href: "/konten", scope: "all" },
+  { label: "Channel", href: "#channel", scope: "home" },
 ] as const;
