@@ -129,17 +129,38 @@ export function useYouTubePlayer(videoId: string): State & { mountRef: React.Ref
     const onStateChange = (e: { data: number }) => {
       if (e.data !== PLAYING) return;
       setStarted(true);
-      const p = playerRef.current;
-      if (p) setCurrentTime(p.getCurrentTime());
+
+      const at = position();
+      if (at !== null) setCurrentTime(at);
     };
 
-    const poll = setInterval(() => {
+    /*
+     * The object YT.Player hands back is a proxy, and its methods are not all in
+     * place the instant it is constructed: getPlayerState can still be missing for
+     * a moment while the embed is being set up. Calling it then throws inside the
+     * interval callback, which surfaces as a page error and stops the clock for the
+     * rest of the session — so playback is never noticed and the chat panel never
+     * opens. Treated as "not playing yet" until it turns up.
+     */
+    const state = (): number | null => {
       const p = playerRef.current;
-      if (!p || document.visibilityState !== "visible") return;
-      if (p.getPlayerState() !== PLAYING) return;
+      if (!p || typeof p.getPlayerState !== "function") return null;
+      return p.getPlayerState();
+    };
+
+    const position = (): number | null => {
+      const p = playerRef.current;
+      if (!p || typeof p.getCurrentTime !== "function") return null;
+      return p.getCurrentTime();
+    };
+
+    const tick = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      if (state() !== PLAYING) return;
 
       setStarted(true);
-      setCurrentTime(p.getCurrentTime());
+      const at = position();
+      if (at !== null) setCurrentTime(at);
     }, TICK_MS);
 
     // The player object only exists once the API has loaded, so the listener is
@@ -156,7 +177,7 @@ export function useYouTubePlayer(videoId: string): State & { mountRef: React.Ref
     }, 200);
 
     return () => {
-      clearInterval(poll);
+      clearInterval(tick);
       clearInterval(bind);
       playerRef.current?.removeEventListener?.("onStateChange", onStateChange);
     };
