@@ -329,14 +329,23 @@ export function useLiveChat(videoId: string, currentTime: number): State {
       loaded.current = true;
       held.current += fresh.length;
 
-      setMessages(
-        useCursor
-          ? (prev) =>
-              [...prev, ...fresh].sort((a, b) => (a.offsetSeconds ?? 0) - (b.offsetSeconds ?? 0))
-          : [...fresh].sort((a, b) => (a.offsetSeconds ?? 0) - (b.offsetSeconds ?? 0)),
-      );
+      /*
+       * Appended either way. A seek used to replace the list, which read as the
+       * chat having been deleted; the transcript is a record of what has been peeked,
+       * so a new stretch joins what is already there.
+       *
+       * The cap drops the *oldest* rather than stopping: a broadcast can run to tens
+       * of thousands of lines, and the stretches just peeked at are the ones worth
+       * keeping reachable.
+       */
+      setMessages((prev) => {
+        const merged = [...prev, ...fresh].sort(
+          (a, b) => (a.offsetSeconds ?? 0) - (b.offsetSeconds ?? 0),
+        );
+        return merged.length > MESSAGE_LIMIT ? merged.slice(-MESSAGE_LIMIT) : merged;
+      });
 
-      setStatus(fresh.length > 0 ? "replay" : "quiet");
+      setStatus(seen.current.size > 0 ? "replay" : "quiet");
       failures.current = 0;
     },
     [videoId],
@@ -379,18 +388,16 @@ export function useLiveChat(videoId: string, currentTime: number): State {
 
     const settle = setTimeout(() => {
       /*
-       * A jump well past the end of what has been read: the visitor scrubbed into a
-       * stretch nobody has loaded. Start again around where they are, because
-       * paging forward from where they were would walk the whole rest of the
-       * broadcast to arrive.
+       * A jump past what has been read. Fetch from where the visitor is and *keep*
+       * what is already held.
+       *
+       * Replacing the list here is what made a seek look like it deleted the
+       * chat: everything read before vanished and the panel came back holding only
+       * the new stretch. The transcript is a record of what has been peeked, so a
+       * seek adds to it. Paging forward instead would walk the whole rest of the
+       * broadcast to arrive, which is why this seeks rather than pages.
        */
-      if (!loaded.current || target > to.current + JUMP_SECONDS) {
-        seen.current.clear();
-        cursor.current = null;
-        from.current = 0;
-        to.current = 0;
-        loaded.current = false;
-
+      if (target > to.current + JUMP_SECONDS) {
         void (async () => {
           try {
             await loadReplay(target - BEHIND_SECONDS, false);
@@ -408,7 +415,7 @@ export function useLiveChat(videoId: string, currentTime: number): State {
        * and the scroll has something behind the playhead. This is what replaces the
        * load-more button: there is no button because there is nothing to press.
        */
-      if (!cursor.current || held.current >= MESSAGE_LIMIT) return;
+      if (!cursor.current || seen.current.size >= MESSAGE_LIMIT) return;
 
       void (async () => {
         try {

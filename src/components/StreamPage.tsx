@@ -98,7 +98,7 @@ export function StreamPage() {
             </div>
 
             <div className="lg:col-span-4">
-              <ChatPanel videoId={id} chat={chat} />
+              <ChatPanel videoId={id} chat={chat} playback={playback} />
             </div>
           </div>
 
@@ -229,10 +229,13 @@ function MetaRow({ item }: { item: ContentItem | null }) {
 function ChatPanel({
   videoId,
   chat,
+  playback,
 }: {
   videoId: string;
   chat: ReturnType<typeof useLiveChat>;
+  playback: { started: boolean; currentTime: number };
 }) {
+  const { started, currentTime } = playback;
   const { messages, status, mode } = chat;
   // Which kind of read this is, as the endpoint reported it, not as the site's
   // stream list guesses: the list only carries the newest broadcasts.
@@ -241,13 +244,11 @@ function ChatPanel({
   const logRef = useRef<HTMLDivElement>(null);
 
   /**
-   * Everything that has been read, newest at the bottom.
+   * Everything that has been read, in order, newest at the bottom.
    *
-   * No playhead windowing. A replay transcript that shows only the minute around
-   * the playhead reads as an empty panel the moment the visitor scrolls away from
-   * where they started, and it is not what a chat log is: YouTube's own live chat
-   * is a continuous scroll of everything said, and this is the same thing for a
-   * broadcast that has ended.
+   * Nothing is dropped when the playhead moves. A seek used to look like the chat
+   * had been deleted because the list was replaced; now a peeked stretch joins what
+   * was already there, and the log scrolls to wherever the video happens to be.
    */
   const visible = messages;
 
@@ -261,6 +262,42 @@ function ChatPanel({
     const atBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 80;
     if (atBottom) node.scrollTop = node.scrollHeight;
   }, [visible.length]);
+
+  /*
+   * Follow the playhead through the log.
+   *
+   * The transcript grows in both directions as it is read — forwards as the video
+   * plays, backwards when the visitor peeks earlier — so the newest line is rarely
+   * the one beside the video. This scrolls to the message nearest where the player
+   * is, which is what makes the chat read alongside the broadcast instead of
+   * scrolling past it.
+   *
+   * Each row carries its position in the recording, so the target is found by
+   * looking at the DOM rather than by arithmetic on an index that shifts as more
+   * arrive. A live stream has no fixed positions and is left alone.
+   */
+  useEffect(() => {
+    if (!started || mode !== "replay") return;
+
+    const log = logRef.current;
+    if (!log) return;
+
+    let nearest: HTMLElement | null = null;
+    let nearestGap = Infinity;
+
+    for (const row of log.querySelectorAll<HTMLElement>("li[data-offset]")) {
+      const offset = Number(row.dataset.offset);
+      if (!Number.isFinite(offset)) continue;
+
+      const gap = Math.abs(offset - currentTime);
+      if (gap < nearestGap) {
+        nearestGap = gap;
+        nearest = row;
+      }
+    }
+
+    if (nearest) nearest.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [currentTime, mode, started, visible.length]);
 
   return (
     /*
@@ -285,12 +322,28 @@ function ChatPanel({
           <ChatCircle size={18} aria-hidden="true" className="text-fg-muted" />
         )}
         <h2 className="text-sm font-semibold">{mode === "replay" ? "Replay chat" : "Live chat"}</h2>
-        {messages.length > 0 && (
+        {messages.length > 0 && started && (
           <span className="ml-auto font-mono text-xs text-fg-subtle">{visible.length}</span>
         )}
       </div>
 
-      {visible.length > 0 ? (
+      {!started ? (
+        /* Waits for playback. A transcript sitting still beside a paused video is
+           out of context — a recording holds thousands of lines and none of them
+           are the moment being looked at. Once the video is running the log scrolls
+           to where the playhead is and the reader can go back from there. */
+        <div className="flex min-h-0 flex-1 flex-col justify-center px-5 py-8 text-center">
+          <Play size={22} aria-hidden="true" className="mx-auto text-fg-subtle" weight="fill" />
+          <p className="mt-3 text-sm leading-relaxed text-fg-muted">
+            {status === "loading" ? "Membaca chat…" : "Putar videonya dulu"}
+          </p>
+          {status !== "loading" && (
+            <p className="mt-2 text-xs leading-relaxed text-fg-subtle">
+              Chat-nya muncul bareng video, lalu ikut ngikutin waktu tayannya.
+            </p>
+          )}
+        </div>
+      ) : visible.length > 0 ? (
         <div
           id="konten-chat-log"
           ref={logRef}
@@ -299,7 +352,7 @@ function ChatPanel({
         >
           <ul className="flex flex-col gap-3">
             {visible.map((m) => (
-              <li key={m.id} className="flex gap-2.5">
+              <li key={m.id} data-offset={m.offsetSeconds ?? undefined} className="flex gap-2.5">
                 {m.avatar ? (
                   <img
                     src={m.avatar}
