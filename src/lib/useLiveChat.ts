@@ -20,9 +20,9 @@ export type ChatMessage = {
   /**
    * Position in the recording, in seconds. Replay only.
    *
-   * This is what lines the log up with the video: the panel keeps the messages
-   * sitting around the player's current time, so the chat reads alongside the
-   * broadcast rather than scrolling past it.
+   * This is what lines the log up with the video: the panel shows the messages
+   * around the player's current time, so the chat reads alongside the broadcast
+   * rather than scrolling past it.
    */
   offsetSeconds: number | null;
   /** "member" or "paid" for the highlighted posts, null otherwise. */
@@ -36,9 +36,7 @@ type Payload = {
   title?: string | null;
   messages?: ChatMessage[];
   cursor?: string | null;
-  /** Replay: true when the recording has more chat after this page. */
   more?: boolean;
-  /** Replay: position in the recording this page reached, in seconds. */
   offsetSeconds?: number | null;
   durationSeconds?: number | null;
 };
@@ -50,24 +48,19 @@ type State = {
   /**
    * Broadcast name from the API, or null when it could not be read.
    *
-   * The site carries only the newest handful of streams, so a link to an older
-   * broadcast has no local metadata and would otherwise render as a bare
-   * "Broadcast". The endpoint reads the same watch page the cursor needs, so the
-   * name comes along for free.
+   * The site carries only the newest streams, so a link to an older broadcast has
+   * no local metadata and would otherwise render as a bare "Broadcast". The
+   * endpoint reads the same watch page the cursor needs, so the name comes along
+   * for free.
    */
   title: string | null;
   /**
    * Which side of the broadcast these messages come from:
    *   live     the stream is running, and this is a rolling window of the tail
-   *   replay   the stream is over, and this is read out of the recording
+   *   replay   the stream is over, and these are read out of the recording
    */
   mode: Mode | null;
   status: "loading" | Mode | "quiet" | "unavailable";
-  /** True while a replay has further pages to fetch. */
-  more: boolean;
-  loadingMore: boolean;
-  /** Ask for the next stretch of a replay. Does nothing once there is no more. */
-  loadMore: () => void;
 };
 
 /** How often to re-ask during a live stream. The endpoint advertises its own. */
@@ -77,58 +70,137 @@ const POLL_MS = 15_000;
 const MAX_FAILURES = 4;
 
 /**
+ * How much of the recording to hold either side of the playhead.
+ *
+ * Behind it is the readable past. A page ahead is so a message does not appear
+ * after the line it answers. YouTube serves a replay in pages of roughly
+ * forty-five seconds, so this is one or two pages' worth.
+ */
+const BEHIND_SECONDS = 90;
+const AHEAD_SECONDS = 20;
+
+/**
+ * How long the playhead must settle before the chat goes and gets the stretch
+ * around it. Without this, dragging the scrubber fires a request per frame.
+ */
+const SEEK_SETTLE_MS = 700;
+
+/** Slack before deciding the playhead has left the stretch that is held. */
+const EDGE_MARGIN_SECONDS = 15;
+
+/**
  * Chat for one broadcast, live or replayed.
  *
- * The two are different reads, and the difference is not cosmetic. A running
- * stream only exposes a rolling window of the last few minutes, so this polls it
- * and folds each response into the list by id. A finished stream exposes its
- * whole recording a page at a time, so it is read once and then extended on
- * demand: what it holds is a transcript of the broadcast, not a live tail.
+ * The two are different reads, and the difference is not cosmetic.
+ *
+ * A live stream exposes a rolling window of the last few minutes and nothing
+ * older, so this polls it and folds each response into the list by id.
+ *
+ * A finished stream exposes its recording a page at a time. The chat follows the
+ * playhead: it holds the stretch around the video's position, extends forward
+ * while the video plays on, and starts again from a seek when the visitor scrubs
+ * somewhere new. Filtering a single page would blank the log the moment the
+ * visitor jumped past the end of it, which is what a page of chat cannot avoid.
+ *
+ * Fetching is deliberately *not* driven by the clock. The position is sampled
+ * every second, and treating each sample as a request would clear and refill the
+ * log once a second — a flicker, and a billed serverless call per second. The
+ * clock only decides whether the held stretch is still the right one.
  *
  * Polling is paused while the tab is hidden, because a serverless function bills
  * per invocation and chat nobody is looking at is not worth paying for.
  */
-export function useLiveChat(videoId: string, isLive: boolean): State {
+export function useLiveChat(videoId: string, started: boolean, currentTime: number): State {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [title, setTitle] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode | null>(null);
   const [status, setStatus] = useState<State["status"]>("loading");
-  const [more, setMore] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
+  /**
+   * Live or replay, as the endpoint reported it.
+   *
+   * Kept separate from the visible `mode` because it drives *which* effect runs,
+   * and it has to be known before the first message arrives. It comes from the
+   * server rather than from the site's own stream list: that list only carries the
+   * newest broadcasts, so a link to any older one — or to a live stream that has
+   * not been picked up yet — would otherwise be read as archived and routed to the
+   * replay reader, which finds no offsets and refetches every second.
+   */
+  const [detected, setDetected] = useState<Mode | null>(null);
 
-  // Refs rather than state for everything the poll and the pager read, so neither
-  // has to be rebuilt because a value they care about changed.
+  // Refs for everything the timers read, so nothing is rebuilt on a value change.
   const seen = useRef(new Set<string>());
-  const failures = useRef(0);
   const cursor = useRef<string | null>(null);
-  const offset = useRef(0);
+  const failures = useRef(0);
   const modeRef = useRef<Mode | null>(null);
-  const inFlight = useRef(false);
+  /** Offsets, in seconds, that the held messages actually cover. */
+  const from = useRef(0);
+  const to = useRef(0);
+  /**
+   * Whether anything is actually held yet.
+   *
+   * A separate flag rather than a test on `from`, because the first page of a
+   * replay legitimately starts at offset 0. Reading that as "nothing loaded" sent
+   * every sample down the re-seek branch, so the log was cleared and refetched once
+   * a second: a flicker, and a billed request per second.
+   */
+  const loaded = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
 
-  /** Add anything not already held, keeping the list ordered by post time. */
-  const absorb = useCallback((incoming: ChatMessage[]) => {
-    const fresh = incoming.filter((m) => m?.id && !seen.current.has(m.id));
-    for (const m of fresh) seen.current.add(m.id);
-    if (fresh.length === 0) return;
-
-    setMessages((prev) => [...prev, ...fresh].sort((a, b) => (a.at ?? 0) - (b.at ?? 0)));
-  }, []);
-
-  useEffect(() => {
+  const clear = useCallback(() => {
     seen.current.clear();
-    failures.current = 0;
     cursor.current = null;
-    offset.current = 0;
+    failures.current = 0;
     modeRef.current = null;
-    inFlight.current = false;
+    from.current = 0;
+    to.current = 0;
+    loaded.current = false;
 
     setMessages([]);
     setTitle(null);
     setMode(null);
     setStatus("loading");
-    setMore(false);
+  }, []);
 
+  /**
+   * Ask once which kind of broadcast this is.
+   *
+   * The endpoint reads the video's own player response, so it can tell a running
+   * stream from a finished one even for a video the site has no record of. That
+   * answer then routes the reading: polling for a live tail, following the
+   * playhead for a recording.
+   */
+  useEffect(() => {
+    clear();
+    setDetected(null);
     if (!videoId) return;
+
+    const controller = new AbortController();
+
+    void (async () => {
+      try {
+        const res = await fetch(`/api/chat?id=${videoId}`, { signal: controller.signal });
+        if (!res.ok) throw new Error(`api returned ${res.status}`);
+
+        const payload = (await res.json()) as Payload;
+        const resolved: Mode = payload.mode ?? (payload.isLive ? "live" : "replay");
+
+        setDetected(resolved);
+        setMode(resolved);
+        setTitle(payload.title ?? null);
+      } catch {
+        if (controller.signal.aborted) return;
+        setStatus("unavailable");
+      }
+    })();
+
+    return () => controller.abort();
+  }, [videoId, clear]);
+
+  /* -------------------------------------------------------------- *
+   * Live: poll the rolling window
+   * -------------------------------------------------------------- */
+  useEffect(() => {
+    if (!videoId || detected !== "live") return;
 
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -140,18 +212,19 @@ export function useLiveChat(videoId: string, isLive: boolean): State {
 
         const payload = (await res.json()) as Payload;
         const incoming = Array.isArray(payload.messages) ? payload.messages : [];
+        const fresh = incoming.filter((m) => m?.id && !seen.current.has(m.id));
+        for (const m of fresh) seen.current.add(m.id);
 
-        const resolved: Mode = payload.mode ?? (payload.isLive ? "live" : "replay");
+        if (fresh.length > 0) {
+          setMessages((prev) =>
+            [...prev, ...fresh].sort((a, b) => (a.at ?? 0) - (b.at ?? 0)),
+          );
+        }
 
-        absorb(incoming);
-        modeRef.current = resolved;
-        setMode(resolved);
+        modeRef.current = "live";
+        setMode("live");
         setTitle((prev) => payload.title ?? prev);
-        setMore(payload.more === true);
-        setStatus(incoming.length > 0 || seen.current.size > 0 ? resolved : "quiet");
-
-        cursor.current = payload.cursor ?? null;
-        if (typeof payload.offsetSeconds === "number") offset.current = payload.offsetSeconds;
+        setStatus(seen.current.size > 0 ? "live" : "quiet");
 
         failures.current = 0;
       } catch {
@@ -159,26 +232,18 @@ export function useLiveChat(videoId: string, isLive: boolean): State {
 
         failures.current += 1;
         if (failures.current >= MAX_FAILURES) {
-          // A broadcast that keeps refusing is reported rather than retried
-          // forever against a billed endpoint.
           setStatus("unavailable");
           return;
         }
-        setStatus((prev) => (prev === "loading" ? "loading" : prev));
       }
 
-      // Only a running stream is polled. The first request always happens, even
-      // for a finished broadcast, because that is what reads its name.
-      if (modeRef.current === "live" && !controller.signal.aborted) {
-        timer = setTimeout(tick, POLL_MS);
-      }
+      if (!controller.signal.aborted) timer = setTimeout(tick, POLL_MS);
     }
 
     void tick();
 
-    // Do not poll a hidden tab; resume promptly when it comes back.
     const onVisibility = () => {
-      if (document.visibilityState === "visible" && modeRef.current === "live") void tick();
+      if (document.visibilityState === "visible") void tick();
       else if (timer) clearTimeout(timer);
     };
     document.addEventListener("visibilitychange", onVisibility);
@@ -188,47 +253,151 @@ export function useLiveChat(videoId: string, isLive: boolean): State {
       controller.abort();
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [videoId, isLive, absorb]);
+  }, [videoId, detected, clear]);
 
-  const loadMore = useCallback(() => {
-    if (!cursor.current || inFlight.current) return;
+  /* -------------------------------------------------------------- *
+   * Replay: follow the playhead
+   * -------------------------------------------------------------- */
 
-    inFlight.current = true;
-    setLoadingMore(true);
+  /**
+   * Fetch one stretch of the recording.
+   *
+   * `useCursor` walks forward from what is already held, which is the cheap way to
+   * extend while a video plays on. Anything else starts again from a seek, because
+   * paging forward from the wrong end would walk the length of the broadcast to
+   * arrive.
+   */
+  const loadReplay = useCallback(
+    async (seekSeconds: number, useCursor: boolean) => {
+      if (!videoId) return;
+
+      const url =
+        `/api/chat?id=${videoId}&mode=replay` +
+        `&seek=${Math.max(0, Math.floor(seekSeconds))}` +
+        (useCursor && cursor.current ? `&cursor=${encodeURIComponent(cursor.current)}` : "");
+
+      const res = await fetch(url, abortRef.current ? { signal: abortRef.current.signal } : {});
+      if (!res.ok) throw new Error(`api returned ${res.status}`);
+
+      const payload = (await res.json()) as Payload;
+      const incoming = Array.isArray(payload.messages) ? payload.messages : [];
+
+      const fresh = incoming.filter((m) => m?.id && !seen.current.has(m.id));
+      for (const m of fresh) seen.current.add(m.id);
+
+      cursor.current = payload.cursor ?? null;
+      modeRef.current = "replay";
+      setMode("replay");
+      setTitle((prev) => payload.title ?? prev);
+
+      // Track the span actually held, so a later move knows whether to extend or
+      // to start over. Offsets are null for entries the payload does not date.
+      const offsets = fresh
+        .map((m) => m.offsetSeconds)
+        .filter((v): v is number => typeof v === "number");
+
+      if (offsets.length > 0) {
+        const low = Math.min(...offsets);
+        const high = Math.max(...offsets);
+
+        if (useCursor) {
+          from.current = Math.min(from.current || low, low);
+          to.current = Math.max(to.current, high);
+        } else {
+          from.current = low;
+          to.current = high;
+        }
+      }
+      loaded.current = true;
+
+      setMessages(
+        useCursor
+          ? (prev) =>
+              [...prev, ...fresh].sort((a, b) => (a.offsetSeconds ?? 0) - (b.offsetSeconds ?? 0))
+          : [...fresh].sort((a, b) => (a.offsetSeconds ?? 0) - (b.offsetSeconds ?? 0)),
+      );
+
+      setStatus(fresh.length > 0 ? "replay" : "quiet");
+      failures.current = 0;
+    },
+    [videoId],
+  );
+
+  // One controller for the whole replay, torn down when the broadcast changes.
+  useEffect(() => {
+    if (!videoId || detected !== 'replay') return;
 
     const controller = new AbortController();
+    abortRef.current = controller;
+    return () => controller.abort();
+  }, [videoId, detected]);
 
-    // The cursor already points past the last message; the seek field is what the
-    // replay endpoint reads its position from, so both are sent and must agree.
-    const url =
-      `/api/chat?id=${videoId}&mode=replay` +
-      `&seek=${Math.floor(offset.current)}` +
-      `&cursor=${encodeURIComponent(cursor.current)}`;
+  // Reset and first read, keyed only on the broadcast and on playback starting.
+  // Deliberately not keyed on currentTime: that would clear the log every second.
+  useEffect(() => {
+    clear();
+    if (!videoId || detected !== 'replay' || !started) return;
 
-    fetch(url, { signal: controller.signal })
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`api returned ${res.status}`);
-        return (await res.json()) as Payload;
-      })
-      .then((payload) => {
-        const incoming = Array.isArray(payload.messages) ? payload.messages : [];
+    void (async () => {
+      try {
+        await loadReplay(currentTime - BEHIND_SECONDS, false);
+      } catch {
+        if (abortRef.current?.signal.aborted) return;
+        failures.current += 1;
+        if (failures.current >= MAX_FAILURES) setStatus("unavailable");
+      }
+    })();
+    // currentTime is read, not tracked: it changes every second and the logic below
+    // decides for itself when that matters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoId, detected, started, clear, loadReplay]);
 
-        absorb(incoming);
-        cursor.current = payload.cursor ?? null;
-        if (typeof payload.offsetSeconds === "number") offset.current = payload.offsetSeconds;
+  // React to the playhead moving, but only act when the held stretch is wrong.
+  useEffect(() => {
+    if (!videoId || detected !== 'replay' || !started) return;
 
-        setMore(payload.more === true);
-        setStatus(incoming.length > 0 ? "replay" : "quiet");
-      })
-      .catch(() => {
-        // Whatever was already loaded stays; the button remains available so a
-        // single failed page does not strand the transcript.
-      })
-      .finally(() => {
-        inFlight.current = false;
-        setLoadingMore(false);
-      });
-  }, [videoId, absorb]);
+    const target = Math.max(0, currentTime);
 
-  return { messages, title, mode, status, more, loadingMore, loadMore };
+    const settle = setTimeout(() => {
+      const insideSpan =
+        loaded.current && target >= from.current - EDGE_MARGIN_SECONDS && target <= to.current;
+
+      // Already holding the right stretch. Extend forward only when the playhead
+      // is running out of it and there is more to read.
+      if (insideSpan) {
+        if (target < to.current - AHEAD_SECONDS || !cursor.current) return;
+
+        void (async () => {
+          try {
+            await loadReplay(to.current, true);
+          } catch {
+            // A failed extension keeps what is already held; the next move retries.
+          }
+        })();
+        return;
+      }
+
+      // Somewhere new: start again around it, biased back so there is history
+      // behind the playhead rather than a wall of text in front of it.
+      seen.current.clear();
+      cursor.current = null;
+      from.current = 0;
+      to.current = 0;
+      loaded.current = false;
+
+      void (async () => {
+        try {
+          await loadReplay(target - BEHIND_SECONDS, false);
+        } catch {
+          if (abortRef.current?.signal.aborted) return;
+          failures.current += 1;
+          if (failures.current >= MAX_FAILURES) setStatus("unavailable");
+        }
+      })();
+    }, SEEK_SETTLE_MS);
+
+    return () => clearTimeout(settle);
+  }, [videoId, detected, started, currentTime, loadReplay]);
+
+  return { messages, title, mode, status };
 }

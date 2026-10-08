@@ -43,26 +43,25 @@ export function StreamPage() {
 
   const item = streams.find((entry) => entry.videoId === id) ?? null;
 
-  // The chat hook lives here rather than inside the panel because the broadcast's
-  // name also comes from it: the site carries only the newest streams, so a link
-  // to an older one has no local metadata and would otherwise render as a bare
-  // "Broadcast". Fetching chat is also what reads the watch page that names it.
-  const chat = useLiveChat(id ?? "", item?.live === true);
-
   /**
    * Whether the video has been started, and where it has got to.
    *
    * The player reports this through YouTube's iframe API rather than this page
    * tracking its own clicks, because the control the visitor presses is inside
-   * the iframe. Held here so the chat panel can wait for playback and then follow
-   * it; `useCallback` keeps the identity stable so the player's effect does not
-   * re-run on every tick.
+   * the iframe. Held here so the chat can wait for playback and then follow it;
+   * `useCallback` keeps the identity stable so the player's effect does not re-run
+   * on every tick.
    */
   const [playback, setPlayback] = useState({ started: false, currentTime: 0 });
   const onPlayback = useCallback((next: { started: boolean; currentTime: number }) => {
     setPlayback(next);
   }, []);
 
+  // The chat hook lives here rather than inside the panel because the broadcast's
+  // name also comes from it: the site carries only the newest streams, so a link
+  // to an older one has no local metadata and would otherwise render as a bare
+  // "Broadcast". Fetching chat is also what reads the watch page that names it.
+  const chat = useLiveChat(id ?? "", playback.started, playback.currentTime);
   const heading = item?.title ?? chat.title;
 
   useEffect(() => {
@@ -72,14 +71,17 @@ export function StreamPage() {
   if (!id) return <Missing />;
 
   return (
-    <section id="isi-stream" aria-labelledby="stream-heading" className="pt-24 pb-24 md:pt-32 md:pb-32">
+    /* Tighter top padding than the other pages. This one carries a player the
+       visitor is meant to press straight away, and the full nav clearance pushed
+       the video itself below the fold. */
+    <section id="isi-stream" aria-labelledby="stream-heading" className="pt-16 pb-20 md:pt-20 md:pb-24">
       <div className="shell">
         <Reveal amount={0.2}>
           <a
             href="/konten"
-            className="inline-flex items-center gap-1.5 text-sm text-fg-muted hover:text-fg"
+            className="inline-flex items-center gap-1.5 text-xs text-fg-muted hover:text-fg"
           >
-            <Play size={14} aria-hidden="true" weight="fill" />
+            <Play size={12} aria-hidden="true" weight="fill" />
             Kembali ke daftar
           </a>
         </Reveal>
@@ -90,19 +92,19 @@ export function StreamPage() {
               there they made the left column the tallest thing in the row, and the
               chat panel, which fills its row, grew down to match them. That is why
               it used to hang past the bottom of the video. */}
-          <div className="mt-8 grid gap-6 lg:grid-cols-12">
+          <div className="mt-5 grid gap-6 lg:grid-cols-12">
             <div className="lg:col-span-8">
               <Player videoId={id} onPlayback={onPlayback} />
             </div>
 
             <div className="lg:col-span-4">
-              <ChatPanel item={item} videoId={id} chat={chat} playback={playback} />
+              <ChatPanel videoId={id} chat={chat} playback={playback} />
             </div>
           </div>
 
           <h1
             id="stream-heading"
-            className="mt-6 font-display text-2xl font-semibold leading-snug tracking-tight md:text-3xl"
+            className="mt-5 font-display text-xl font-semibold leading-snug tracking-tight md:text-3xl"
           >
             {heading ?? "Broadcast"}
           </h1>
@@ -137,14 +139,16 @@ function Missing() {
 /**
  * The player.
  *
- * `origin` is required by YouTube's embed API for postMessage to work, so it is
- * read from the live location rather than the build-time config, which would
- * break on any other host. autoplay stays off and playsinline is set, so a phone
- * does not start playing audio the visitor did not ask for.
+ * The element handed to the YouTube API is an empty div rather than an iframe the
+ * page writes itself. YT annotates and owns whatever element it builds the player
+ * into, and it does not reliably take over an iframe the page authored; handing it
+ * a mount point and a video id is the supported shape. So the iframe, and its
+ * src, come from YT and are not in this file.
  *
- * enablejsapi=1 turns on the callbacks the chat panel listens to: without it the
- * page cannot tell whether the video is playing, nor where in the recording it
- * has got to, and a replay chat has nothing to line itself up against.
+ * `origin` is passed through so postMessage works, and is read from the live
+ * location rather than build-time config so it is right on any host. autoplay is
+ * left off and playsinline set, so a phone does not start playing audio nobody
+ * asked for.
  */
 function Player({
   videoId,
@@ -153,32 +157,18 @@ function Player({
   videoId: string;
   onPlayback: (state: { started: boolean; currentTime: number }) => void;
 }) {
-  const [origin, setOrigin] = useState("");
-  const frameRef = useRef<HTMLIFrameElement>(null);
-  const { started, currentTime } = useYouTubePlayer(frameRef);
-
-  useEffect(() => {
-    setOrigin(window.location.origin);
-  }, []);
+  const { started, currentTime, mountRef } = useYouTubePlayer(videoId);
 
   useEffect(() => {
     onPlayback({ started, currentTime });
   }, [started, currentTime, onPlayback]);
 
-  if (!origin) {
-    return <div className="aspect-video w-full rounded-card border border-line bg-surface" />;
-  }
-
   return (
     <div className="aspect-video w-full overflow-hidden rounded-card border border-line bg-cocoa">
-      <iframe
-        ref={frameRef}
-        src={`https://www.youtube.com/embed/${videoId}?enablejsapi=1&origin=${encodeURIComponent(origin)}`}
+      <div
+        ref={mountRef}
+        className="size-full [&>iframe]:size-full [&>iframe]:border-0"
         title="Pemutar broadcast Mizu Hamzazu"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        referrerPolicy="strict-origin-when-cross-origin"
-        allowFullScreen
-        className="size-full border-0"
       />
     </div>
   );
@@ -237,37 +227,36 @@ function MetaRow({ item }: { item: ContentItem | null }) {
  * A broadcast with no chat at all is the only case that gets an explanation.
  */
 function ChatPanel({
-  item,
   videoId,
   chat,
   playback,
 }: {
-  item: ContentItem | null;
   videoId: string;
   chat: ReturnType<typeof useLiveChat>;
   playback: { started: boolean; currentTime: number };
 }) {
-  const isLive = item?.live === true;
-  const { messages, status, mode, more, loadingMore, loadMore } = chat;
+  const { messages, status, mode } = chat;
+  // Which kind of read this is, as the endpoint reported it, not as the site's
+  // stream list guesses: the list only carries the newest broadcasts.
+  const isLive = mode === "live";
   const { started, currentTime } = playback;
 
   const logRef = useRef<HTMLDivElement>(null);
 
   /**
-   * Which messages belong on screen at this point in the recording.
+   * A last filter over what the hook holds.
    *
-   * A replay is read against the player rather than down on its own: everything
-   * up to where the video is now is history, and the next stretch has not been
-   * said yet. Holding a window around the current position keeps the log in step
-   * with what is happening on screen instead of sitting still while the video
-   * runs on. A live stream has no fixed position, so nothing is filtered.
+   * The hook already fetches the stretch around the playhead, so this only trims
+   * the edges of a page that reaches further than the window wants. A live stream
+   * has no fixed position, so nothing is filtered there. The window is the readable
+   * past plus a little ahead, so a message does not pop in after the line it
+   * answers.
    */
   const visible = useMemo(() => {
     if (mode !== "replay" || !started) return messages;
     return messages.filter((m) => {
       if (m.offsetSeconds === null) return false;
-      // A trailing window: what was just said, plus a little ahead of the playhead.
-      return m.offsetSeconds <= currentTime + 15 && m.offsetSeconds >= currentTime - 90;
+      return m.offsetSeconds <= currentTime + 20 && m.offsetSeconds >= currentTime - 90;
     });
   }, [messages, mode, started, currentTime]);
 
@@ -279,11 +268,19 @@ function ChatPanel({
   }, [visible.length, started]);
 
   return (
-    // h-0 min-h-full rather than h-full. A grid row takes its height from
-    // whichever cell is tallest, so a chat panel sized by its own content would
-    // set that height itself and the row would never settle at the player's.
-    // Zeroing the contribution and then filling the row breaks the cycle.
-    <div className="flex h-0 min-h-full max-h-[70vh] flex-col overflow-hidden rounded-card border border-line bg-surface lg:max-h-none">
+    /*
+     * Height comes from an aspect ratio rather than from h-full.
+     *
+     * h-full cannot work here: a grid row takes its height from its tallest cell,
+     * so a panel sized by h-full asks the row how tall it is, and the row is
+     * waiting to be told. It settles at the chat's own content height instead.
+     *
+     * aspect-[8/9] is not a guess. The player fills 8 of 12 columns at 16:9, so
+     * its height is (width - gap) * 8/12 * 9/16 = 0.375. The panel fills 4 of 12,
+     * so at 8:9 its height is (width - gap) * 4/12 * 9/8 = 0.375 as well. The two
+     * agree exactly, which is what lets the row take its height from the player.
+     */
+    <div className="flex max-h-[70vh] flex-col overflow-hidden rounded-card border border-line bg-surface lg:aspect-[8/9] lg:max-h-none">
       <div className="flex items-center gap-2 border-b border-line px-5 py-3.5">
         {mode === "replay" ? (
           <Archive size={18} aria-hidden="true" className="text-fg-muted" />
@@ -382,21 +379,6 @@ function ChatPanel({
               </li>
             ))}
           </ul>
-
-          {/* A replay is read a page at a time, so it needs a way to ask for the
-              next stretch. A live stream has nothing to page through. */}
-          {mode === "replay" && more && (
-            <div className="mt-4 border-t border-line pt-4">
-              <button
-                type="button"
-                onClick={loadMore}
-                disabled={loadingMore}
-                className="w-full rounded-button border border-line px-4 py-2 text-sm font-medium text-fg-muted transition-colors hover:bg-peach-soft hover:text-fg disabled:cursor-progress disabled:opacity-60"
-              >
-                {loadingMore ? "Membaca…" : "Muat chat sebelumnya"}
-              </button>
-            </div>
-          )}
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col justify-center px-5 py-8 text-center">
@@ -407,8 +389,10 @@ function ChatPanel({
             <>
               <Archive size={22} aria-hidden="true" className="mx-auto text-fg-subtle" />
               <p className="mt-3 text-sm leading-relaxed text-fg-muted">
-                Belum ada chat di menit ini. Kalau chat-nya ada tapi belum ikut
-                terbaca, muat lagi.
+                Belum ada chat di menit ini.
+              </p>
+              <p className="mt-2 text-xs leading-relaxed text-fg-subtle">
+                Kalau quiet, chat-nya akan muncul sendiri sesuai waktu Tayannya.
               </p>
             </>
           ) : status === "loading" ? (

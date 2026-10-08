@@ -1,29 +1,29 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * Minimal shape of the pieces of YouTube's IFrame API this page uses.
  *
  * Declared rather than pulled from `@types/youtube` because that package brings a
- * compiler plugin and a large dependency tree for four methods, and the project
- * already builds without a type dependency on it.
+ * compiler plugin and a large dependency tree for a handful of methods, and the
+ * project already builds without a type dependency on it.
  */
 interface PlayerApi {
-  playVideo: () => void;
   getCurrentTime: () => number;
   getDuration: () => number;
   getPlayerState: () => number;
-  destroy?: () => void;
+  addEventListener: (type: string, fn: (e: { data: number }) => void) => void;
+  removeEventListener: (type: string, fn: (e: { data: number }) => void) => void;
+  destroy: () => void;
 }
 
-interface YtWindow {
+interface YtGlobal {
   YT?: {
-    Player: new (element: HTMLElement, options?: unknown) => PlayerApi;
+    Player: new (element: HTMLElement, options?: { videoId: string; playerVars?: Record<string, unknown> }) => PlayerApi;
   };
+  onYouTubeIframeAPIReady?: (() => void) | undefined;
 }
 
 type State = {
-  /** The player instance, ready once the API has loaded. */
-  player: PlayerApi | null;
   /** True once the visitor has started playback. */
   started: boolean;
   /** Seconds into the video, sampled while playing. */
@@ -33,32 +33,38 @@ type State = {
 /** Player state 1 is PLAYING. */
 const PLAYING = 1;
 
-/**
- * How often the clock is sampled. A second is what chat needs: the log is lined
- * up against the video, not tracked frame by frame.
- */
+/** How often the clock is sampled. A second is what chat needs. */
 const TICK_MS = 1000;
 
 /** How often to check whether the API script has finished loading. */
-const READY_POLL_MS = 250;
+const READY_POLL_MS = 200;
 
 /**
- * Watch a YouTube embed.
+ * Watch a YouTube embed and report when it plays and where it has got to.
  *
- * The API script is loaded from youtube.com rather than bundled, once per document,
- * and the player is constructed once `YT` appears on the iframe's window. Nothing
- * here relies on the global `onYouTubeIframeAPIReady` callback: it fires once per
- * document and is easy to miss if the script is already loaded by the time this
- * component mounts, which is exactly the case on a client-side navigation.
+ * `YT` lives on this window, not on the iframe's. The embed is served from
+ * youtube.com, so reaching into `iframe.contentWindow` for the API hits a
+ * cross-origin wall and reads undefined forever — which looks like a player that
+ * never starts. The API script is loaded here on the parent page precisely so
+ * that `YT` is reachable from here.
  *
- * The clock is polled rather than pushed, because the API exposes no time event.
- * Sampling stops when the tab is hidden or playback is paused, so an idle visitor
- * costs nothing.
+ * The player is constructed by YouTube into a plain <div> that this hook owns,
+ * with the video id handed over as a playerVar. Handing YT an iframe it did not
+ * create is fiddly — YT expects to own the element and annotate it as a
+ * ytp-youtube-player — and it does not reliably take over one the page built, so
+ * the mount point is empty and YT fills it.
+ *
+ * Readiness is detected by polling `window.YT` as well as by the API's own
+ * callback. That callback fires once per document and is already gone by the time
+ * this mounts on a client-side navigation, so it alone would work on a hard reload
+ * and nowhere else.
+ *
+ * The clock is polled because the API exposes no time event. Sampling stops when
+ * the tab is hidden or playback is paused, so an idle visitor costs nothing.
  */
-export function useYouTubePlayer(
-  frameRef: React.RefObject<HTMLIFrameElement | null>,
-): State {
-  const [player, setPlayer] = useState<PlayerApi | null>(null);
+export function useYouTubePlayer(videoId: string): State & { mountRef: React.RefObject<HTMLDivElement> } {
+  const mountRef = useRef<HTMLDivElement>(null!);
+  const playerRef = useRef<PlayerApi | null>(null);
   const [started, setStarted] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
 
@@ -72,70 +78,89 @@ export function useYouTubePlayer(
     document.head.appendChild(tag);
   }, []);
 
-  // Construct the player as soon as the API is present on the iframe's window.
+  // Build the player as soon as the API is present on this window.
   useEffect(() => {
-    const frame = frameRef.current;
-    if (!frame) return;
+    const mount = mountRef.current;
+    if (!mount) return;
 
     let cancelled = false;
-    let instance: PlayerApi | null = null;
 
+    const attach = () => {
+      if (playerRef.current || cancelled) return true;
+
+      const YT = (window as unknown as YtGlobal).YT;
+      if (!YT?.Player) return false;
+
+      const instance = new YT.Player(mount, {
+        videoId,
+        playerVars: { rel: 0, modestbranding: 1 },
+      });
+
+      playerRef.current = instance;
+      setStarted(false);
+      return true;
+    };
+
+    // Fast path: the API calls this itself once it has loaded.
+    const w = window as unknown as YtGlobal;
+    const previous = w.onYouTubeIframeAPIReady;
+    w.onYouTubeIframeAPIReady = () => {
+      previous?.();
+      attach();
+    };
+
+    // Slow path: covers the case where the script loaded before this mounted.
     const probe = setInterval(() => {
       if (cancelled) return;
-
-      const yt = (frame.contentWindow as unknown as YtWindow | null)?.YT;
-      if (!yt?.Player) return;
-
-      clearInterval(probe);
-      instance = new yt.Player(frame);
-      setPlayer(instance);
+      if (attach()) clearInterval(probe);
     }, READY_POLL_MS);
 
     return () => {
       cancelled = true;
       clearInterval(probe);
-
-      // Destroy rather than leave the instance attached: the component unmounts on
-      // every route change, and a live instance keeps its listeners and its
-      // polling timer.
-      instance?.destroy?.();
+      w.onYouTubeIframeAPIReady = previous;
+      playerRef.current?.destroy?.();
+      playerRef.current = null;
     };
-  }, [frameRef]);
+  }, [videoId]);
 
-  // Sample the clock while playing, and notice when playback starts.
+  // Notice when playback starts and sample the clock while it runs.
   useEffect(() => {
-    if (!player) return;
-
-    const tick = setInterval(() => {
-      if (document.visibilityState !== "visible") return;
-      if (player.getPlayerState() !== PLAYING) return;
-
-      setStarted(true);
-      setCurrentTime(player.getCurrentTime());
-    }, TICK_MS);
-
-    // Playback can start between two samples, so the element's own state change is
-    // listened for as well; otherwise the panel would sit on its placeholder for
-    // up to a second after the visitor pressed play.
-    const target = frameRef.current?.contentWindow as unknown as
-      | {
-          addEventListener?: (type: string, fn: (e: { data: number }) => void) => void;
-          removeEventListener?: (type: string, fn: (e: { data: number }) => void) => void;
-        }
-      | null;
-
     const onStateChange = (e: { data: number }) => {
       if (e.data !== PLAYING) return;
       setStarted(true);
-      setCurrentTime(player.getCurrentTime());
+      const p = playerRef.current;
+      if (p) setCurrentTime(p.getCurrentTime());
     };
-    target?.addEventListener?.("onStateChange", onStateChange);
+
+    const poll = setInterval(() => {
+      const p = playerRef.current;
+      if (!p || document.visibilityState !== "visible") return;
+      if (p.getPlayerState() !== PLAYING) return;
+
+      setStarted(true);
+      setCurrentTime(p.getCurrentTime());
+    }, TICK_MS);
+
+    // The player object only exists once the API has loaded, so the listener is
+    // attached from a small interval that gives up once it has.
+    let attempts = 0;
+    const bind = setInterval(() => {
+      const p = playerRef.current;
+      if (p) {
+        p.addEventListener("onStateChange", onStateChange);
+        clearInterval(bind);
+        return;
+      }
+      if (++attempts > 50) clearInterval(bind);
+    }, 200);
 
     return () => {
-      clearInterval(tick);
-      target?.removeEventListener?.("onStateChange", onStateChange);
+      clearInterval(poll);
+      clearInterval(bind);
+      playerRef.current?.removeEventListener?.("onStateChange", onStateChange);
     };
-  }, [player, frameRef]);
+  }, []);
 
-  return { player, started, currentTime };
+  return { started, currentTime, mountRef };
 }
