@@ -56,8 +56,14 @@ export function Tweets() {
              * newest at the top and "newest first" being the whole promise of the
              * page. A single column cannot put a hole under a short card either,
              * which was the other reason for the change, so it costs nothing here.
+             *
+             * Capped at 44rem and centred. Inheriting the shell's full width made
+             * every card as wide as the page, which for a post of a sentence or two
+             * is a banner rather than something to read. A measure of roughly forty
+             * characters keeps a line of tweet text readable, and centring makes the
+             * narrow column look chosen instead of stranded on a wide screen.
              */
-            className="mt-14"
+            className="mx-auto mt-14 w-full max-w-[44rem]"
             stagger={0.04}
             /*
              * Fire on any part of the list being visible.
