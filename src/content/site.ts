@@ -74,6 +74,7 @@ export const ROUTES = [
   "/konten/video",
   "/konten/clips",
   "/tweets",
+  "/fanart",
   "/channel",
 ] as const;
 
@@ -125,5 +126,6 @@ export const navigation = [
   { label: "Tentang", href: "/tentang" },
   { label: "Konten", href: "/konten" },
   { label: "Tweets", href: "/tweets" },
+  { label: "Fan Art", href: "/fanart" },
   { label: "Channel", href: "/channel" },
 ] as const satisfies ReadonlyArray<{ label: string; href: Route }>;

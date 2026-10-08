@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { Channels } from "@/components/Channels";
+import { Fanart } from "@/components/Fanart";
 import { Footer } from "@/components/Footer";
 import { Hero } from "@/components/Hero";
 import { Konten } from "@/components/Konten";
@@ -105,6 +106,7 @@ export default function App() {
         {route === "/konten/video" ? <Konten category="videos" /> : null}
         {route === "/konten/clips" ? <Konten category="clips" /> : null}
         {route === "/tweets" ? <Tweets /> : null}
+        {route === "/fanart" ? <Fanart /> : null}
         {route === "/channel" ? <Channels standalone /> : null}
       </main>
 

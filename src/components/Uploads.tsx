@@ -33,10 +33,10 @@ export function Uploads() {
   const { streams, live, source } = useContent();
 
   // The endpoint returns the newest broadcasts regardless of age; this section
-  // shows only the last day of them. A label the grids write is the source of
-  // truth here, so an unreadable age is treated as not recent rather than
-  // guessed into the window.
-  const items = streams.filter((item) => {
+  // shows the last day of them. A label the grids write is the source of truth
+  // here, so an unreadable age is treated as not recent rather than guessed into
+  // the window.
+  const recent = streams.filter((item) => {
     const label = ageLabel(item);
     if (!label) return false;
 
@@ -45,6 +45,20 @@ export function Uploads() {
 
     return Number(parts[1]) * AGE_UNIT_MS[parts[2]] < RECENT_WINDOW_MS;
   });
+
+  /*
+   * Never an empty shelf.
+   *
+   * The window is a day, and Mizu does not stream every day, so most days this
+   * filtered to nothing and the section rendered as a heading over blank space
+   * with a note pointing elsewhere — a worse answer than showing the last thing
+   * she did, however long ago. So if the window comes up empty the newest
+   * broadcast is shown instead, with its real age on it.
+   *
+   * The fallback is the newest entry, so when she goes live it *is* the live one:
+   * it passes the window on its own and this branch stops being taken.
+   */
+  const items = recent.length > 0 ? recent : streams.slice(0, 1);
 
   return (
     <section id="klip" aria-labelledby="uploads-heading" className="py-24 md:py-32">
@@ -59,7 +73,9 @@ export function Uploads() {
           <p className="mt-5 max-w-[52ch] text-base leading-relaxed text-fg-muted md:text-lg">
             {live
               ? "Ada yang sedang live sekarang."
-              : "Broadcast dari 24 jam terakhir, diambil langsung dari channel."}
+              : recent.length > 0
+                ? "Broadcast dari 24 jam terakhir, diambil langsung dari channel."
+                : "Belum ada broadcast dalam 24 jam. Yang paling baru:"}
           </p>
         </Reveal>
 
@@ -84,7 +100,7 @@ export function Uploads() {
           </StaggerGroup>
         ) : (
           <p className="mt-14 max-w-[52ch] text-sm leading-relaxed text-fg-subtle">
-            Tidak ada broadcast dalam 24 jam terakhir. Arsip lengkapnya ada di{" "}
+            Belum ada broadcast yang bisa ditampilkan. Arsip lengkapnya ada di{" "}
             <a href="/konten" className="underline underline-offset-4 hover:text-fg">
               Konten
             </a>
