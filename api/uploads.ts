@@ -346,23 +346,49 @@ export default async function handler(req: UploadsRequest, res: UploadsResponse)
   }
 
   // TEMPORARY DIAGNOSTIC - REMOVE
-  const probe = req.url?.match(/[?&]probe=([A-Za-z0-9_-]{11})/)?.[1];
+const probe = req.url?.match(/[?&]probe=([A-Za-z0-9_-]{11})/)?.[1];
   if (probe) {
-    const page = await fetchText(`https://www.youtube.com/watch?v=${probe}`);
-    const iso = await readStartTime(probe);
+    // TEMPORARY DIAGNOSTIC - REMOVE
+    const strategies: Record<string, unknown> = {};
+    strategies.watchPage = await readStartTime(probe);
+
+    for (const [name, client] of [
+      ["innertubeWeb", { clientName: "WEB", clientVersion: "2.20250101.00.00" }],
+      ["innertubeAndroid", { clientName: "ANDROID", clientVersion: "19.09.37", androidSdkVersion: 30 }],
+      ["innertubeIos", { clientName: "IOS", clientVersion: "19.09.3", deviceModel: "iPhone14,3" }],
+      ["innertubeTv", { clientName: "TVHTML5", clientVersion: "7.20250101.18.00" }],
+    ] as const) {
+      try {
+        const res = await fetch("https://www.youtube.com/youtubei/v1/player?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "user-agent": client.clientName === "ANDROID" ? "com.google.android.youtube/19.09.37 (Linux; U; Android 11)" : UA,
+            "accept-language": "id-ID,id;q=0.9",
+          },
+          body: JSON.stringify({ videoId: probe, context: { client }, contentCheckOk: true, racyCheckOk: true }),
+        });
+        const json = (await res.json()) as {
+          playabilityStatus?: { status?: string; reason?: string };
+          videoDetails?: { isLive?: boolean; isLiveContent?: boolean; title?: string };
+          microformat?: { playerMicroformatRenderer?: { liveBroadcastDetails?: { startTimestamp?: string } } };
+        };
+        strategies[name] = {
+          http: res.status,
+          status: json.playabilityStatus?.status ?? null,
+          reason: json.playabilityStatus?.reason ?? null,
+          title: json.videoDetails?.title ?? null,
+          isLive: json.videoDetails?.isLive ?? null,
+          isLiveContent: json.videoDetails?.isLiveContent ?? null,
+          start: json.microformat?.playerMicroformatRenderer?.liveBroadcastDetails?.startTimestamp ?? null,
+        };
+      } catch (error) {
+        strategies[name] = { error: String(error) };
+      }
+    }
+
     res.setHeader("Cache-Control", "no-store");
-    res.status(200).json({
-      probe,
-      iso,
-      wib: iso ? toWib(iso) : null,
-      bytes: page?.length ?? null,
-      title: page?.match(/<title>([^<]*)<\/title>/)?.[1] ?? null,
-      hasInitialData: page ? page.includes("ytInitialData") : false,
-      hasLiveBroadcastDetails: page ? page.includes("liveBroadcastDetails") : false,
-      hasLiveBroadcastRender: page ? page.includes("liveBroadcastRenderer") : false,
-      consent: page ? page.includes("consent.youtube.com") : false,
-      captcha: page ? /unusual traffic|recaptcha|g-recaptcha/i.test(page) : false,
-    });
+    res.status(200).json({ probe, strategies });
     return;
   }
 
