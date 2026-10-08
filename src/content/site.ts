@@ -60,6 +60,16 @@ export const channels = {
   },
 } as const;
 
+/**
+ * Route table.
+ *
+ * Owned here rather than in App.tsx so the nav and the router cannot disagree
+ * about which paths exist. App imports the type; nothing else needs the list.
+ */
+export const ROUTES = ["/", "/tentang", "/konten", "/tweets", "/channel"] as const;
+
+export type Route = (typeof ROUTES)[number];
+
 /** The creator's own hashtags, in the order the channel description lists them. */
 export const hashtags = [
   { tag: "#MizuHammu", use: "General" },
@@ -83,23 +93,28 @@ export const series = [
 ] as const;
 
 /**
- * Colophon. Names the real tools behind the page so the visitor can see where
- * the build came from. Kept as a footnote, not a showcase section.
+ * Colophon. A credit line naming who built the page. Kept as a footnote, not a
+ * showcase section.
  */
 export const colophon = {
-  body: "Halaman statis, tanpa CMS. Data feed diambil langsung dari channel, bukan disalin manual.",
-  tools: ["React", "Vite", "Tailwind v4", "Motion"],
+  /** Credit line. Replaces a former tool list, which described the stack rather than the person. */
+  credit: "Developed by Sakamura",
 } as const;
 
 /**
  * Nav links.
  *
- * `scope` says which page a link belongs to, so the same list can render
- * differently on each without a second array to keep in sync. A link with no
- * scope is a section anchor on the current page.
+ * Every href is a full route, never a bare "#anchor". That is the fix for the
+ * footer bug: on /konten, "#tentang" and "#channel" resolved against a page that
+ * has neither section, so both looked clickable and did nothing. A path always
+ * resolves, and the nav and the router now read the same table.
+ *
+ * `satisfies` ties every href to the Route union, so a typo becomes a type error
+ * rather than a link that quietly goes nowhere.
  */
 export const navigation = [
-  { label: "Tentang", href: "#tentang", scope: "home" },
-  { label: "Konten", href: "/konten", scope: "all" },
-  { label: "Channel", href: "#channel", scope: "home" },
-] as const;
+  { label: "Tentang", href: "/tentang" },
+  { label: "Konten", href: "/konten" },
+  { label: "Tweets", href: "/tweets" },
+  { label: "Channel", href: "/channel" },
+] as const satisfies ReadonlyArray<{ label: string; href: Route }>;

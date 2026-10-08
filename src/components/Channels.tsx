@@ -32,14 +32,30 @@ const ROWS = [
   },
 ];
 
-export function Channels() {
+/**
+ * Channel links.
+ *
+ * `standalone` promotes the heading to an h1 and pads the top, for when this is
+ * the whole page rather than the closing block of the home page. Two headings
+ * on one page is the thing this flag exists to prevent.
+ */
+export function Channels({ standalone = false }: { standalone?: boolean } = {}) {
+  const Heading = standalone ? "h1" : "h2";
+
   return (
-    <section id="channel" aria-labelledby="channels-heading" className="py-24 md:py-32">
+    <section
+      id={standalone ? "isi-channel" : "channel"}
+      aria-labelledby="channels-heading"
+      className={standalone ? "pt-24 md:pt-32" : "py-24 md:py-32"}
+    >
       <div className="shell">
         <Reveal amount={0.3}>
-          <h2 id="channels-heading" className="max-w-[18ch] text-3xl font-semibold leading-tight tracking-tight md:text-4xl">
+          <Heading
+            id="channels-heading"
+            className="max-w-[18ch] text-3xl font-semibold leading-tight tracking-tight md:text-4xl"
+          >
             Di mana Mizu bisa ditemukan
-          </h2>
+          </Heading>
         </Reveal>
 
         <Reveal delay={0.06} amount={0.2}>

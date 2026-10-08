@@ -508,15 +508,42 @@ function parseSearchResults(html: string): SearchEntry[] {
  *
  * Excludes her own uploads, which the other two tabs already carry, and anything
  * still live, which is a broadcast rather than a clip.
+ *
+ * Search returns results by relevance, not by date, so they are sorted here.
+ * The age label is the only ordering signal available on this surface, and it is
+ * coarse: "4 bulan lalu" carries no day, so clips within the same month are
+ * grouped at the same age and their relative order is whatever search happened to
+ * return. That is a real limit of the data rather than a rounding choice, and it
+ * is why the sort falls back to the original order on a tie instead of inventing
+ * a sequence.
+ *
+ * The pool is also bounded by what search surfaced, roughly 25 results, so this
+ * is the newest clips *among those found* and not an exhaustive archive.
  */
 async function readClips(): Promise<ContentItem[]> {
   const html = await fetchText(SEARCH_PAGE);
   if (!html) return [];
 
-  return parseSearchResults(html)
-    .filter((entry) => entry.mentions && !entry.isOwn && !entry.isLive)
+  const ranked = parseSearchResults(html).map((entry, position) => ({ entry, position }));
+  const qualifying = ranked.filter(
+    ({ entry }) => entry.mentions && !entry.isOwn && !entry.isLive,
+  );
+
+  // Newest first. Array.prototype.sort is stable in every engine this targets, so
+  // the position tiebreak below is a documented one, not an accident.
+  qualifying.sort((a, b) => {
+    const left = a.entry.ageSeconds;
+    const right = b.entry.ageSeconds;
+    if (left === right) return a.position - b.position;
+    // An unreadable age cannot be placed, so it goes last rather than first.
+    if (left === null) return 1;
+    if (right === null) return -1;
+    return left - right;
+  });
+
+  return qualifying
     .slice(0, CLIP_LIMIT)
-    .map((entry) => ({
+    .map(({ entry }) => ({
       videoId: entry.videoId,
       url: `https://www.youtube.com/watch?v=${entry.videoId}`,
       title: entry.title,

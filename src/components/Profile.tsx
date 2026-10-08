@@ -18,19 +18,59 @@ import { Reveal, StaggerGroup, StaggerItem } from "@/lib/reveal";
   * Nothing in this section is written in her voice or claims anything about
   * her preferences.
   */
-export function Profile() {
+/**
+ * Profile.
+ *
+ * `detail` promotes the heading to an h1 and leads with the long-form page
+ * treatment, for when this is the whole route. On the home page it is a section
+ * and the hero already owns the h1.
+ *
+ * The detail variant adds what the section could not fit: the quote gets its own
+ * block with the sentence it came from named, and the hashtag list explains each
+ * tag's use rather than leaving it as two bare words.
+ */
+export function Profile({ detail = false }: { detail?: boolean } = {}) {
+  const Heading = detail ? "h1" : "h2";
+
   return (
-    <section id="tentang" aria-labelledby="profile-heading" className="py-24 md:py-32">
+    <section
+      id={detail ? "isi-tentang" : "tentang"}
+      aria-labelledby="profile-heading"
+      className={detail ? "pt-24 md:pt-32" : "py-24 md:py-32"}
+    >
       <div className="shell">
-        <div className="grid gap-14 md:grid-cols-12 md:gap-12">
-          <Reveal className="md:col-span-5" amount={0.3}>
-            {/* Verbatim from the X bio: "Hamster Princess". */}
-            <h2
+        {detail && (
+          <Reveal amount={0.3}>
+            <p className="text-sm font-medium text-accent">{site.channelTitle}</p>
+            <Heading
               id="profile-heading"
-              className="text-3xl font-semibold leading-tight tracking-tight md:text-4xl"
+              className="mt-4 text-3xl font-semibold leading-tight tracking-tight md:text-4xl"
             >
-              Hamster Princess
-            </h2>
+              Tentang Mizu
+            </Heading>
+            <p className="mt-5 max-w-[58ch] text-base leading-relaxed text-fg-muted md:text-lg">
+              Halaman ini mengumpulkan apa yang tertulis tentang dirinya, dan
+              tidak lebih dari itu.
+            </p>
+          </Reveal>
+        )}
+
+        <div className={`grid gap-14 md:grid-cols-12 md:gap-12 ${detail ? "mt-16" : ""}`}>
+          <Reveal className="md:col-span-5" amount={0.3}>
+            {/* Verbatim from the X bio: "Hamster Princess". A subheading here
+                because the h1 above already exists on the detail route. */}
+            {detail ? (
+              <h2 className="text-3xl font-semibold leading-tight tracking-tight md:text-4xl">
+                Hamster Princess
+              </h2>
+            ) : (
+              <h2
+                id="profile-heading"
+                className="text-3xl font-semibold leading-tight tracking-tight md:text-4xl"
+              >
+                Hamster Princess
+              </h2>
+            )}
 
             <figure className="mt-8 border-l-2 border-peach pl-5">
               <CrownSimple size={22} className="text-milk" aria-hidden="true" />
@@ -38,9 +78,25 @@ export function Profile() {
                 Kenalin aku Mizu, salah satu putri dari kerajaan hamzazu!
               </blockquote>
               <figcaption className="mt-3 text-sm text-fg-subtle">
-                Dari deskripsi channel YouTube.
+                Dari deskripsi channel YouTube, ditulis sendiri olehnya.
               </figcaption>
             </figure>
+
+            {/* Only on the full page: what each hashtag is for, spelled out.
+                The section version has room for the pairs but not the reasons. */}
+            {detail && (
+              <dl className="mt-10">
+                {hashtags.map((tag) => (
+                  <div
+                    key={tag.tag}
+                    className="flex items-baseline justify-between gap-4 border-b border-line py-3"
+                  >
+                    <dt className="font-medium text-fg">{tag.tag}</dt>
+                    <dd className="shrink-0 text-sm text-fg-subtle">{tag.use}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
           </Reveal>
 
           <Reveal className="md:col-span-6 md:col-start-7" delay={0.08} amount={0.3}>

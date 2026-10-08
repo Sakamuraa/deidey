@@ -1,13 +1,13 @@
 import { ThemeToggle } from "@/components/Nav";
 import { ChannelButtons } from "@/components/Nav";
-import { channels, colophon, navigation, site } from "@/content/site";
+import { channels, colophon, navigation, site, type Route } from "@/content/site";
 
 /**
  * Colophon and footer. The pinstripe texture lives here rather than on a
  * section, because this is the only place on the page with enough density to
  * carry it without fighting the copy.
  */
-export function Footer() {
+export function Footer({ route }: { route: Route }) {
   const year = new Date().getFullYear();
 
   return (
@@ -29,8 +29,12 @@ export function Footer() {
             <ul className="flex flex-col gap-1">
               {navigation.map((item) => (
                 <li key={item.href}>
+                  {/* Real anchors, so a footer link opens in a new tab on
+                      middle-click and shows a status-bar URL. The header nav
+                      intercepts clicks for in-app routing; this one does not. */}
                   <a
                     href={item.href}
+                    aria-current={route === item.href ? "page" : undefined}
                     className="inline-flex min-h-9 items-center text-sm text-fg-muted transition-colors duration-200 hover:text-fg"
                   >
                     {item.label}
@@ -54,9 +58,7 @@ export function Footer() {
           <p>
             {year} {site.name}. Konten dan gambar milik kreator yang ditampilkan.
           </p>
-          <p className="max-w-[46ch] sm:text-right">
-            {colophon.body} Dibangun dengan {colophon.tools.join(", ")}.
-          </p>
+          <p className="sm:text-right">{colophon.credit}</p>
         </div>
       </div>
     </footer>

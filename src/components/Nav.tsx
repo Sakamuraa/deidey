@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 
 import { ActionLink } from "@/components/Action";
 import { HeartMark, XMark, YoutubeMark } from "@/components/ChannelIcons";
-import { channels, navigation, site } from "@/content/site";
+import { channels, navigation, site, type Route } from "@/content/site";
 import { asset } from "@/lib/paths";
 import { useTheme } from "@/lib/useTheme";
 
@@ -34,8 +34,8 @@ export function Nav({
   route,
   onNavigate,
 }: {
-  route: "home" | "konten";
-  onNavigate: (route: "home" | "konten") => void;
+  route: Route;
+  onNavigate: (route: Route) => void;
 }) {
   const [scrolled, setScrolled] = useState(false);
 
@@ -66,17 +66,15 @@ export function Nav({
       >
         <div className="shell flex h-full items-center justify-between gap-4">
           <a
-            // Home is a separate route, so on /konten the wordmark has to leave
-            // the page rather than jump to a top anchor that is not there.
-            href={route === "home" ? "#atas" : "/"}
-            onClick={
-              route === "konten"
-                ? (event) => {
-                    event.preventDefault();
-                    onNavigate("home");
-                  }
-                : undefined
-            }
+            // The wordmark always goes to the home route, never to a top anchor:
+            // on every other page there is no #atas, so an anchor would land on
+            // a position that happens to exist and read as a broken page.
+            href="/"
+            onClick={(event) => {
+              if (route === "/") return;
+              event.preventDefault();
+              onNavigate("/");
+            }}
             className="flex items-center gap-2.5 font-display text-[1.05rem] font-semibold tracking-tight"
           >
             <img
@@ -91,38 +89,29 @@ export function Nav({
 
           <nav aria-label="Bagian halaman" className="hidden md:block">
             <ul className="flex items-center gap-7">
-              {navigation
-                // Section anchors belong to the home page, so they are hidden on
-                // /konten rather than rendered as links that go nowhere.
-                .filter((item) => item.scope === "all" || item.scope === route)
-                .map((item) => {
-                  // "/" is never in the list, so the only cross-page target is
-                  // /konten and the target route follows from it.
-                  const isCrossPage = item.href.startsWith("/");
-                  const current = isCrossPage && route === "konten";
+              {navigation.map((item) => (
+                <li key={item.href}>
+                  <a
+                    href={item.href}
+                    aria-current={route === item.href ? "page" : undefined}
+                    onClick={(event) => {
+                      // Modified clicks must reach the browser: a new tab or a
+                      // download is the visitor's explicit request.
+                      if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) {
+                        return;
+                      }
 
-                  return (
-                    <li key={item.href}>
-                      <a
-                        href={item.href}
-                        aria-current={current ? "page" : undefined}
-                        onClick={
-                          isCrossPage
-                            ? (event) => {
-                                event.preventDefault();
-                                onNavigate("konten");
-                              }
-                            : undefined
-                        }
-                        className={`inline-flex h-9 items-center text-sm transition-colors duration-200 ${
-                          current ? "text-fg" : "text-fg-muted hover:text-fg"
-                        }`}
-                      >
-                        {item.label}
-                      </a>
-                    </li>
-                  );
-                })}
+                      event.preventDefault();
+                      onNavigate(item.href);
+                    }}
+                    className={`inline-flex h-9 items-center text-sm transition-colors duration-200 ${
+                      route === item.href ? "text-fg" : "text-fg-muted hover:text-fg"
+                    }`}
+                  >
+                    {item.label}
+                  </a>
+                </li>
+              ))}
             </ul>
           </nav>
 
