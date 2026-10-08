@@ -59,22 +59,36 @@ di-parse dari `lockupViewModel`. Dua hal yang perlu diketahui:
   di arsip yang sudah selesai. Semua sembilan arsip yang diperiksa punya
   `startTimestamp` dan `endTimestamp`.
 
-Halaman watch itu 1,3 MB, dan dari IP datacenter sering tidak dikasih sama
-sekali: YouTube menjawab dengan halaman persetujuan cookie, HTTP 200, tanpa
-`liveBroadcastDetails` di dalamnya. Terukur di produksi pada lambda dingin:
-sembilan request paralel menghasilkan tepat satu halaman yang bisa dipakai.
-Maka:
+Halaman watch itu 1,3 MB, dan dari IP datacenter hampir tidak bisa dipakai.
+Dihitung dari produksi:
+
+| Yang dicoba | Hasil dari IP Vercel |
+|---|---|
+| Halaman watch | 200, 1,27 MB, dokumen kena deteksi bot, `liveBroadcastDetails` tidak ada |
+| InnerTube `WEB` | `LOGIN_REQUIRED`, "Sign in to confirm you're not a bot" |
+| InnerTube `TVHTML5` | `LOGIN_REQUIRED`, sama |
+| InnerTube `ANDROID` | HTTP 400 |
+| InnerTube `IOS` | HTTP 400 |
+| Tab `/streams` | **200, parsing jalan** |
+
+Kesimpulannya: dari Vercel, `startTimestamp` **tidak bisa** diambil untuk video
+yang belum pernah dilihat. Yang bisa dibaca cuma tab `/streams`. Maka:
 
 - **Waktu yang sudah-known dijawab dari tabel.** `KNOWN_STARTS` di
   `api/uploads.ts` menyimpan hasil baca watch page yang sudah diverifikasi. Ini
   fakta, bukan cache, karena `startTimestamp` tidak berubah setelah broadcast
-  selesai. Kartu yang sudah ada nol request.
-- **Broadcast baru satu request.** Kalau `videoId` tidak ada di tabel, itu satu-
-  satunya yang harus baca halaman watch.
-- **Request dapat satu percobaan ulang** sebelum kartu boleh tetap kosong, dan
-  hasil negatif disimpan 5 menit saja karena `null` itu fakta soal satu request.
-- **`cookie: CONSENT=YES+...`** dikirim, supaya IP datacenter tidak diarahkan ke
-  interstitial.
+  selesai. Kartu yang sudah ada nol request, dan ini satu-satunya sumber jam
+  mulai yang andal.
+- **`cookie: CONSENT=YES+...` dan timeout 15 detik** tetap dikirim. Tidak
+  menolong untuk IP yang diblokir; hanya relevan kalau request sampai ke
+  YouTube tanpa interstitial.
+- **Broadcast baru: badge dan penonton tetap jalan, jam mulai tidak.** Keduanya
+  datang dari tab `/streams` yang masih bisa dibaca, jadi saat ada live, kartu
+  tetap menyala dengan benar. Yang kosong hanya jam mulainya, sampai video itu
+  masuk tabel — dan masuk tabel harus lewat satu baca manual dari watch page.
+
+Kalau nanti live dan mau jam mulainya juga, itu satu perintah: ambil
+`startTimestamp` dari watch page, tambah satu baris ke `KNOWN_STARTS`, push.
 
 Cache per payload tetap ada: `s-maxage=300` kalau ada yang live, `s-maxage=3600`
 kalau sepi, karena arsip yang selesai tidak berubah berjam-jam.
