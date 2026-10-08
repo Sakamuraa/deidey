@@ -348,6 +348,49 @@ export default async function handler(req: UploadsRequest, res: UploadsResponse)
   // TEMPORARY DIAGNOSTIC - REMOVE
 const probe = req.url?.match(/[?&]probe=([A-Za-z0-9_-]{11})/)?.[1];
   if (probe) {
+    // TEMPORARY DIAGNOSTIC - REMOVE: does the /streams tab, the one endpoint
+    // that still answers from a datacenter IP, carry any usable time?
+    const tab = await fetchText(STREAMS_TAB);
+    const raw = tab?.match(/var ytInitialData = (\{.*?\});<\/script>/s)?.[1];
+    const rows: unknown[] = [];
+
+    if (raw) {
+      (function walk(node: unknown): void {
+        if (!node || typeof node !== "object") return;
+        if (Array.isArray(node)) {
+          for (const item of node) walk(item);
+          return;
+        }
+        const lockup = (node as Record<string, unknown>).lockupViewModel as LockupNode | undefined;
+        if (lockup && typeof lockup.contentId === "string") {
+          const meta = lockup.metadata?.lockupMetadataViewModel;
+          for (const row of meta?.metadata?.contentMetadataViewModel?.metadataRows ?? []) {
+            const parts: string[] = [];
+            for (const part of row.metadataParts ?? []) {
+              const text = plainText(part?.text);
+              if (text) parts.push(text);
+            }
+            if (parts.length > 0) {
+              rows.push({ id: lockup.contentId ?? null, parts });
+            }
+          }
+        }
+        for (const value of Object.values(node as Record<string, unknown>)) walk(value);
+      })(JSON.parse(raw));
+    }
+
+    res.setHeader("Cache-Control", "no-store");
+    res.status(200).json({
+      tabBytes: tab?.length ?? null,
+      tabHasLiveBroadcastDetails: tab ? tab.includes("liveBroadcastDetails") : false,
+      tabHasStartTimestamp: tab ? tab.includes("startTimestamp") : false,
+      rowCount: rows.length,
+      rows,
+    });
+    return;
+  }
+
+  if (false) {
     // TEMPORARY DIAGNOSTIC - REMOVE
     const strategies: Record<string, unknown> = {};
     strategies.watchPage = await readStartTime(probe);
