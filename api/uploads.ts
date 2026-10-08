@@ -348,9 +348,21 @@ export default async function handler(req: UploadsRequest, res: UploadsResponse)
   // TEMPORARY DIAGNOSTIC - REMOVE
   const probe = req.url?.match(/[?&]probe=([A-Za-z0-9_-]{11})/)?.[1];
   if (probe) {
+    const page = await fetchText(`https://www.youtube.com/watch?v=${probe}`);
     const iso = await readStartTime(probe);
     res.setHeader("Cache-Control", "no-store");
-    res.status(200).json({ probe, iso, wib: iso ? toWib(iso) : null });
+    res.status(200).json({
+      probe,
+      iso,
+      wib: iso ? toWib(iso) : null,
+      bytes: page?.length ?? null,
+      title: page?.match(/<title>([^<]*)<\/title>/)?.[1] ?? null,
+      hasInitialData: page ? page.includes("ytInitialData") : false,
+      hasLiveBroadcastDetails: page ? page.includes("liveBroadcastDetails") : false,
+      hasLiveBroadcastRender: page ? page.includes("liveBroadcastRenderer") : false,
+      consent: page ? page.includes("consent.youtube.com") : false,
+      captcha: page ? /unusual traffic|recaptcha|g-recaptcha/i.test(page) : false,
+    });
     return;
   }
 
