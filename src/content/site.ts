@@ -80,21 +80,32 @@ export const ROUTES = [
 
 export type Route = (typeof ROUTES)[number];
 
-/** The creator's own hashtags, in the order the channel description lists them. */
 /**
- * Hashtags, in the creator's own spelling.
+ * Hashtags, one per kind of post, in the creator's own spelling.
  *
- * Only one is hers outright: `#Deyillust` is the tag her X bio names for fan
- * art ("use #Deyillust for fanart"), and it is what the fanart page searches.
- * The cap pattern is inconsistent in the wild -- `#Deyillust`, `#DeyIllust` and
- * `#deyillust` all appear on real posts by her and by artists reposting her --
- * so the listed set carries each casing that was actually seen rather than one
- * tidy version that would miss half the posts.
+ * A previous version of this file listed `#Deyillust`, `#DeyIllust` and
+ * `#deyillust` as three separate entries. That was an attempt to cover the
+ * inconsistent casing that turns up in the wild -- and it was wrong twice over.
+ * X treats them as one term, so the fanart search already catches all three
+ * spellings without help, and rendering them as three rows told a visitor nothing
+ * except that the page was unsure. It looked like a duplicate list, which is what
+ * it was.
+ *
+ * Only `#Deyillust` was recoverable by scraping: her X bio names it outright
+ * ("use #Deyillust for fanart") and her posts use it. Her YouTube descriptions
+ * add only `#vtuberid`, `#vtuber` and `#vtuberindonesia`, which are discovery
+ * tags rather than hers -- every Indonesian VTuber uses them. The rest are the
+ * creator's own list.
+ *
+ * `#Deyillust` is what api/fanart.ts searches; the others are here for a visitor
+ * to use, not for the site to act on.
  */
 export const hashtags = [
-  { tag: "#Deyillust", use: "Fan art" },
-  { tag: "#DeyIllust", use: "Fan art" },
-  { tag: "#deyillust", use: "Fan art" },
+  { tag: "#Deyonair", use: "Live" },
+  { tag: "#Deyillust", use: "Fanart" },
+  { tag: "#Clipdey", use: "Clip" },
+  { tag: "#Deyngabrut", use: "Meme" },
+  { tag: "#Deylist", use: "Music" },
 ] as const;
 
 /**

@@ -105,12 +105,21 @@ export function Profile({ detail = false }: { detail?: boolean } = {}) {
           </Reveal>
 
           <Reveal className="md:col-span-6 md:col-start-7" delay={0.08} amount={0.3}>
-            {/* Facts only. No description of her appearance and no guesses
-                about what she likes: neither is something a source states. */}
+            {/*
+              Facts only. No description of her appearance and no guesses
+              about what she likes: neither is something a source states.
+
+              This paragraph previously read "Delapan upload terakhir di feed
+              berjarak enam hari, dua di antaranya dari seri Until Then." Every
+              clause of that was inherited from the site this was cloned from --
+              Until Then is that creator's game series and has nothing to do with
+              her. The numbers below are counted from her own feed.
+            */}
             <p className="max-w-[54ch] text-base leading-relaxed text-fg-muted md:text-lg">
               Bio resminya menyebut ID/EN VTuber dengan model Live 2D.
-              Delapan upload terakhir di feed berjarak enam hari, dua di
-              antaranya dari seri Until Then.
+              Delapan stream terakhir di feed-nya: tiga Plants vs. Zombies 2
+              Gardendless, dua Dungeon Karaoke, dua Free Talk, dan satu Drawing
+              Stream.
             </p>
 
             <StaggerGroup className="mt-10 grid gap-px overflow-hidden rounded-card border border-line bg-line sm:grid-cols-3">
