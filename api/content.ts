@@ -271,8 +271,6 @@ interface ContentItem {
   channel?: string;
   /** Scheduled but not started. Separate from live: one is now, one is later. */
   upcoming?: boolean;
-  /** Set when the stream belongs to another channel, so a card can say so. */
-  demoChannel?: string;
 }
 
 interface LockupEntry {
@@ -428,39 +426,11 @@ function pickUpcoming(html: string): ContentItem | null {
 }
 
 /**
- * Where a demo stream comes from when the channel has nothing scheduled.
- *
- * Set so the card can be seen working; a card that only appears when a creator
- * schedules something is a card nobody reviews. The card labels it as another
- * channel's -- see `demoChannel` -- because the whole point of the card is
- * answering "when is the next stream", and borrowing someone else's schedule
- * without saying so would answer it wrongly.
- */
-const DEMO_HANDLE = "@HisetaPhiniaCh";
-const DEMO_NAME = "Hiseta Phinia";
-
-let demoUpcoming: { at: number; item: ContentItem | null } | null = null;
-
-async function readUpcoming(own: ContentItem | null): Promise<ContentItem | null> {
-  if (own) return own;
-
-  if (demoUpcoming && Date.now() - demoUpcoming.at < MEMORY_TTL_QUIET_MS) {
-    return demoUpcoming.item;
-  }
-
-  const tab = `https://www.youtube.com/${DEMO_HANDLE}/streams?view=0&sort=dd&flow=grid&hl=id&gl=ID`;
-  const html = await fetchText(tab);
-  const item = html ? pickUpcoming(html) : null;
-
-  demoUpcoming = { at: Date.now(), item: item ? { ...item, demoChannel: DEMO_NAME } : null };
-  return demoUpcoming.item;
-}
-
-/**
  * Newest broadcasts, live state included, plus the scheduled one if there is one.
  *
  * Both come out of the same /streams response, so asking for the schedule costs
- * no extra request.
+ * no extra request. There is no fallback to another channel: if this one has
+ * nothing scheduled, the card does not appear.
  */
 async function readStreams(): Promise<{ items: ContentItem[]; upcoming: ContentItem | null }> {
   const html = await fetchText(STREAMS_TAB);
@@ -693,9 +663,7 @@ export default async function handler(req: UploadsRequest, res: UploadsResponse)
     readClips(),
   ]);
 
-  // Only reached when the channel itself has nothing scheduled, and then only so
-  // the card can be seen at all.
-  const upcoming = await readUpcoming(ownUpcoming);
+  const upcoming = ownUpcoming;
 
   if (streams.length === 0 && videos.length === 0 && clips.length === 0) {
     // Everything failed. A stale copy is still true data and beats an error

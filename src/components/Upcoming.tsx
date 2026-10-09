@@ -17,12 +17,6 @@ import type { ContentItem } from "@/lib/useContent";
  * a number that is not there. The honest thing is to link to the stream, where
  * YouTube shows the real time.
  *
- * `demoChannel` is what stops this from quietly lying. When the site has nothing
- * scheduled of its own the card shows a stream from another channel, and it names
- * that channel rather than borrowing the schedule as if it were the site's own.
- * Asked "when is the next stream" and shown a stranger's schedule unlabelled is
- * the wrong answer in a shape that looks right.
- *
  * Two colour decisions worth stating, both of which were wrong first:
  *
  * The wash over the thumbnail is a fixed ink, not `--cocoa` or `--fg`. Both of
@@ -36,8 +30,6 @@ import type { ContentItem } from "@/lib/useContent";
  */
 export function UpcomingCard({ item }: { item: ContentItem | null }) {
   if (!item) return null;
-
-  const isDemo = Boolean(item.demoChannel);
 
   return (
     <Reveal amount={0.25}>
@@ -72,21 +64,11 @@ export function UpcomingCard({ item }: { item: ContentItem | null }) {
 
             <p className="mt-2 flex items-center gap-2 text-sm text-fg-muted">
               <Clock size={15} aria-hidden="true" className="text-glow" />
-              {isDemo ? (
-                <>
-                  Dijadwalkan di channel{" "}
-                  <span className="font-semibold text-fg">{item.demoChannel}</span>, bukan
-                  channel ini.
-                </>
-              ) : (
-                <>Stream berikutnya sudah dijadwalkan.</>
-              )}
+              <>Stream berikutnya sudah dijadwalkan.</>
             </p>
 
             <p className="mt-2 text-sm leading-relaxed text-fg-subtle">
-              {isDemo
-                ? "Card ini menampilkan contoh, karena channel ini belum punya jadwal. Buka stream-nya untuk melihat waktu sebenarnya."
-                : "Waktu mulainya ada di halaman stream-nya."}
+              "Waktu mulainya ada di halaman stream-nya."
             </p>
 
             <div className="mt-5">

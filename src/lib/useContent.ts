@@ -15,8 +15,6 @@ export type ContentItem = {
   channel?: string;
   /** Scheduled but not started. Separate from live: one is now, one is later. */
   upcoming?: boolean;
-  /** Set when the stream belongs to another channel, so a card can say so. */
-  demoChannel?: string;
 };
 
 type ApiPayload = {
