@@ -1,6 +1,6 @@
-import { ArrowSquareOut, Image as ImageIcon, Spinner } from "@phosphor-icons/react";
+import { ArrowSquareOut, Heart, Image as ImageIcon, Spinner } from "@phosphor-icons/react";
 
-import { ActionLink } from "@/components/Action";
+import { ActionButton, ActionLink } from "@/components/Action";
 import { Reveal, StaggerGroup, StaggerItem } from "@/lib/reveal";
 import { useFanart } from "@/lib/useFanart";
 import type { Fanart } from "@/lib/useFanart";
@@ -16,7 +16,7 @@ import type { Fanart } from "@/lib/useFanart";
  * read the feed, because a proxy dies with the instance and the art outlives it.
  */
 export function Fanart() {
-  const { fanart, reason, searchUrl } = useFanart();
+  const { fanart, reason, searchUrl, nextCursor, loadingMore, loadMore } = useFanart();
 
   return (
     <section id="isi-fanart" aria-labelledby="fanart-heading" className="pt-24 pb-24 md:pt-32 md:pb-32">
@@ -30,23 +30,51 @@ export function Fanart() {
             Fan Art
           </h1>
           <p className="mt-5 max-w-[52ch] text-base leading-relaxed text-fg-muted md:text-lg">
-            Ilustrasi yang orang buat buat Deidey, diambil dari/posts bertanda{" "}
+            Ilustrasi yang orang buat buat Deidey, diambil dari posts bertanda{" "}
             <span className="font-mono text-fg">#Deyillust</span> di X.
           </p>
         </Reveal>
 
         {fanart.length > 0 ? (
-          <StaggerGroup
-            className="mt-14 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3"
-            stagger={0.04}
-            amount={0.02}
-          >
-            {fanart.map((item) => (
-              <StaggerItem key={item.id} className="min-w-0">
-                <FanartCard item={item} />
-              </StaggerItem>
-            ))}
-          </StaggerGroup>
+          <>
+            <StaggerGroup
+              className="mt-14 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3"
+              stagger={0.04}
+              amount={0.02}
+            >
+              {fanart.map((item) => (
+                <StaggerItem key={item.id} className="min-w-0">
+                  <FanartCard item={item} />
+                </StaggerItem>
+              ))}
+            </StaggerGroup>
+
+            {/*
+             * The archive does not end at the first page. Nitter's search returns
+             * four items and puts the rest behind a cursor, so the button follows
+             * that cursor one page at a time and disappears when the cursor runs
+             * out -- which is the only honest signal that it has.
+             */}
+            {nextCursor && (
+              <div className="mt-14 flex justify-center">
+                <ActionButton
+                  variant="quiet"
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                  aria-busy={loadingMore}
+                >
+                  {loadingMore ? (
+                    <>
+                      <Spinner size={16} aria-hidden="true" className="animate-spin" />
+                      Memuat…
+                    </>
+                  ) : (
+                    "Muat lebih banyak"
+                  )}
+                </ActionButton>
+              </div>
+            )}
+          </>
         ) : reason === "loading" ? (
           <p className="mt-14 flex items-center gap-2.5 text-sm text-fg-muted">
             <Spinner size={18} aria-hidden="true" className="animate-spin" />
@@ -84,6 +112,13 @@ export function Fanart() {
   );
 }
 
+/** Indonesian count formatting, matching the rest of the page. */
+function compact(value: number): string {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1).replace(".0", "")} jt`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1).replace(".0", "")} rb`;
+  return String(value);
+}
+
 /**
  * One piece.
  *
@@ -117,6 +152,29 @@ function FanartCard({ item }: { item: Fanart }) {
 
         {item.caption && (
           <p className="mt-2 wrap-anywhere text-sm leading-relaxed text-fg-muted">{item.caption}</p>
+        )}
+
+        {/*
+          * Counts come from the page markup now, not the feed -- the RSS omitted
+          * them entirely, so this row simply did not exist before. Null is not
+          * zero: when the instance reports nothing, the row is left out.
+          */}
+        {(item.likes !== null || item.retweets !== null) && (
+          <p className="mt-3 flex items-center gap-3 text-xs text-fg-subtle">
+            {item.likes !== null && (
+              <span className="inline-flex items-center gap-1">
+                <Heart size={13} weight="fill" aria-hidden="true" />
+                {compact(item.likes)}
+                <span className="sr-only">suka</span>
+              </span>
+            )}
+            {item.retweets !== null && (
+              <span>{compact(item.retweets)} repost</span>
+            )}
+            {item.isRetweet && (
+              <span className="text-fg-subtle/80">repost</span>
+            )}
+          </p>
         )}
 
         <a
