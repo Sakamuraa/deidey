@@ -112,7 +112,7 @@ export function Konten({ category = "streams" }: { category?: Category }) {
                   aria-current={selected ? "page" : undefined}
                   className={`inline-flex min-h-11 items-center gap-2 rounded-btn px-4 py-2 text-sm font-medium transition-colors duration-200 ${
                     selected
-                      ? "bg-cocoa text-bg"
+                      ? "bg-obsidian text-bg"
                       : "text-fg-muted hover:bg-surface hover:text-fg"
                   }`}
                 >
@@ -207,7 +207,7 @@ function ContentCard({ item, category }: { item: ContentItem; category: Category
       <div className="relative overflow-hidden rounded-card border border-line bg-surface">
         <CardThumb item={item} />
         {item.live && (
-          <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-pill bg-cocoa px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-bg">
+          <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-pill bg-obsidian px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-bg">
             <span className="relative flex size-1.5">
               <span className="absolute inline-flex size-full animate-ping rounded-full bg-bg opacity-75" />
               <span className="relative inline-flex size-1.5 rounded-full bg-bg" />

@@ -30,8 +30,8 @@ export function Fanart() {
             Fan Art
           </h1>
           <p className="mt-5 max-w-[52ch] text-base leading-relaxed text-fg-muted md:text-lg">
-            Ilustrasi yang orang buat buat Mizu, diambil dari/posts bertanda{" "}
-            <span className="font-mono text-fg">#ForMizu</span> di X.
+            Ilustrasi yang orang buat buat Deidey, diambil dari/posts bertanda{" "}
+            <span className="font-mono text-fg">#Deyillust</span> di X.
           </p>
         </Reveal>
 
@@ -63,7 +63,7 @@ export function Fanart() {
             </p>
             <div className="mt-6">
               <ActionLink href={searchUrl} external variant="quiet">
-                Buka pencarian #ForMizu
+                Buka pencarian #Deyillust
                 <ArrowSquareOut size={16} aria-hidden="true" />
               </ActionLink>
             </div>

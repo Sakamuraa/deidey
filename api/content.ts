@@ -41,7 +41,7 @@
  *
  * The clips filter is deliberately narrow: another channel's video counts only
  * when her name is in the title or the description snippet. A search for a common
- * given name returns plenty of unrelated videos, and "Mizu Hamzazu" is specific
+ * given name returns plenty of unrelated videos, and "Deidey" is specific
  * enough that a false positive needs a coincidence rather than a partial name.
  * Her own uploads are excluded, since those are already in the other two tabs.
  */
@@ -57,14 +57,14 @@ interface UploadsResponse {
   json(body: unknown): void;
 }
 
-const HANDLE = "@MizuHamzazu";
-const CHANNEL_TITLE_PREFIX = "Mizu Hamzazu";
+const HANDLE = "@Deidey";
+const CHANNEL_TITLE_PREFIX = "Deidey";
 
 /** Newest first. Without sort=dd these tabs are ordered by popularity. */
 const STREAMS_TAB = `https://www.youtube.com/${HANDLE}/streams?view=0&sort=dd&flow=grid&hl=id&gl=ID`;
 const VIDEOS_TAB = `https://www.youtube.com/${HANDLE}/videos?view=0&sort=dd&flow=grid&hl=id&gl=ID`;
 const SEARCH_PAGE = `https://www.youtube.com/results?search_query=${encodeURIComponent(
-  "mizu hamzazu",
+  "deidey",
 )}&hl=id&gl=ID`;
 
 const UA =
@@ -548,8 +548,8 @@ function parseSearchResults(html: string): SearchEntry[] {
       // Her name in the title or the description snippet. Checked against both
       // because clippers use either: some name the character, some only mention
       // her in the blurb.
-      mentions: /mizu\s*hamzazu/i.test(`${title} ${description}`),
-      // A collaboration publishes under both names, e.g. "Mizu Hamzazu Ch. dan
+      mentions: /deidey/i.test(`${title} ${description}`),
+      // A collaboration publishes under both names, e.g. "Deidey Ch. dan
       // NapLive", so this matches a prefix rather than the whole string.
       isOwn: channel.startsWith(CHANNEL_TITLE_PREFIX),
       isLive: STREAMING_LABEL.test(published),

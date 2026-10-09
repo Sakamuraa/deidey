@@ -84,7 +84,7 @@ export function Nav({
               height={32}
               className="size-8 rounded-pill object-cover"
             />
-            <span>Mizu Hamzazu</span>
+            <span>Deidey</span>
           </a>
 
           <nav aria-label="Bagian halaman" className="hidden md:block">
@@ -166,9 +166,9 @@ export function ChannelButtons() {
       icon: <XMark size={18} />,
     },
     {
-      label: channels.trakteer.label,
-      handle: channels.trakteer.handle,
-      url: channels.trakteer.url,
+      label: channels.shopee.label,
+      handle: channels.shopee.handle,
+      url: channels.shopee.url,
       icon: <HeartMark size={18} />,
     },
   ];

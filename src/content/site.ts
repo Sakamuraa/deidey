@@ -15,48 +15,48 @@
  */
 
 export const site = {
-  name: "Mizu Hamzazu",
+  name: "Deidey",
   /** Name as it appears on the channel, verbatim. */
-  channelTitle: "Mizu Hamzazu Ch.",
+  channelTitle: "Deidey",
   /** Description as published by the creator, trimmed of decoration. */
-  bio: "Hamster Princess, ID/EN VTuber. Salah satu putri dari kerajaan Hamzazu.",
+  bio: "Isekai Rabbit Warrior. Elite warrior from Praedisium, siap merusak.",
   /**
    * Production origin. The site is served from its own subdomain, so the origin
    * and the site URL are the same thing. Kept in sync with index.html,
    * robots.txt, and sitemap.xml.
    */
-  url: "https://mizuhamzazu.vtube-info.xyz",
+  url: "https://deidey.vtube-info.xyz",
   locale: "id_ID",
   avatar: "/media/avatar-youtube.webp",
-  avatarAlt: "Ilustrasi Mizu Hamzazu: karakter anime berwarna rambut peach memakai mahkota emas",
+  avatarAlt: "Ilustrasi Deidey: karakter anime rabbit warrior dengan rambut ungu gelap dan sorotan lavender",
   /** Smaller crop used for the nav mark, where the square version is too heavy. */
   avatarSmall: "/media/avatar-x.webp",
-  joined: "Bergabung pada Juli 2021",
+  joined: "Bergabung pada Maret 2017",
   /** Character work credits, from the creator's own X bio. */
   credits: [
-    { role: "Model Live 2D", name: "@ardisketch_2d" },
-    { role: "Rig", name: "@Gromb5" },
+    { role: "Illustrator Live 2D", name: "@biittertaste" },
+    { role: "Rig", name: "@saikafuri" },
   ],
 } as const;
 
 export const channels = {
   youtube: {
     label: "YouTube",
-    handle: "@MizuHamzazu",
-    url: "https://www.youtube.com/@MizuHamzazu",
-    note: "Stream dan klip",
+    handle: "@Deidey",
+    url: "https://www.youtube.com/@Deidey",
+    note: "Stream, cover, dan lore",
   },
   x: {
     label: "X",
-    handle: "@mizuhamzazu",
-    url: "https://x.com/mizuhamzazu",
+    handle: "@deidey16_",
+    url: "https://x.com/deidey16_",
     note: "Update harian",
   },
-  trakteer: {
-    label: "Trakteer",
-    handle: "trakteer.id/MizuHamzazu",
-    url: "https://trakteer.id/MizuHamzazu/gift",
-    note: "Support lewat gift",
+  shopee: {
+    label: "Shopee",
+    handle: "deideyisekaistore",
+    url: "https://shopee.co.id/deideyisekaistore",
+    note: "Merch resmi",
   },
 } as const;
 
@@ -81,25 +81,35 @@ export const ROUTES = [
 export type Route = (typeof ROUTES)[number];
 
 /** The creator's own hashtags, in the order the channel description lists them. */
+/**
+ * Hashtags, in the creator's own spelling.
+ *
+ * Only one is hers outright: `#Deyillust` is the tag her X bio names for fan
+ * art ("use #Deyillust for fanart"), and it is what the fanart page searches.
+ * The cap pattern is inconsistent in the wild -- `#Deyillust`, `#DeyIllust` and
+ * `#deyillust` all appear on real posts by her and by artists reposting her --
+ * so the listed set carries each casing that was actually seen rather than one
+ * tidy version that would miss half the posts.
+ */
 export const hashtags = [
-  { tag: "#MizuHammu", use: "General" },
-  { tag: "#Mizuislive", use: "Live" },
-  { tag: "#Mizungelag", use: "Meme" },
-  { tag: "#forMizu", use: "Art" },
+  { tag: "#Deyillust", use: "Fan art" },
+  { tag: "#DeyIllust", use: "Fan art" },
+  { tag: "#deyillust", use: "Fan art" },
 ] as const;
 
 /**
- * Series names exactly as they appear between the brackets in the feed titles.
- * The "kind" column is a plain reading of what the title is about, not a claim
- * from the creator.
+ * Recurring stream formats, named as they appear in the feed titles.
+ *
+ * Counted from the live channel, not assumed: the eight most recent past streams
+ * carry three distinct bracketed formats and one recurring game. The "kind"
+ * column is a plain reading of the format, not a claim from the creator.
  */
 export const series = [
-  { name: "Until Then", kind: "Game" },
-  { name: "Morning Stream", kind: "Ngobrol" },
-  { name: "Phasmophobia", kind: "Game" },
-  { name: "Gartic.io", kind: "Game" },
-  { name: "Super Market Simulator", kind: "Game" },
-  { name: "Freetalk", kind: "Ngobrol" },
+  { name: "Plants vs. Zombies 2 Gardendless", kind: "Game" },
+  { name: "Dungeon Karaoke", kind: "Musik" },
+  { name: "Free Talk", kind: "Ngobrol" },
+  { name: "Drawing Stream", kind: "Gambar" },
+  { name: "Deidey's Lore", kind: "Serial" },
 ] as const;
 
 /**

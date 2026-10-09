@@ -10,12 +10,12 @@
  * README). The same Nitter instances that serve the tweets route also serve a
  * search feed, so this reads:
  *
- *   /search/rss?f=tweets&q=%23ForMizu
+ *   /search/rss?f=tweets&q=%23Deyillust
  *
- * which is Nitter's own rendering of https://x.com/search?q=%23ForMizu&f=live.
+ * which is Nitter's own rendering of https://x.com/search?q=%23Deyillust&f=live.
  *
  * The hashtag is matched case-insensitively here as well, because people write
- * #ForMizu, #formizu and #FORMIZU interchangeably and the search treats them as
+ * #Deyillust, #DeyIllust and #deyillust interchangeably and the search treats them as
  * one term anyway. Matching again costs nothing and catches the entries a
  * case-sensitive test would drop.
  *
@@ -45,7 +45,7 @@ interface FanartResponse {
 
 const INSTANCES = ["https://nitter1.kabii.moe", "https://nitter.kabii.moe"] as const;
 
-const HASHTAG = "formizu";
+const HASHTAG = "deyillust";
 const QUERY = `%23${HASHTAG}`;
 
 const UA =

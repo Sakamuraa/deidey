@@ -50,7 +50,7 @@ export function Uploads() {
   /*
    * Never an empty shelf.
    *
-   * The window is a day, and Mizu does not stream every day, so most days this
+   * The window is a day, and Deidey does not stream every day, so most days this
    * filtered to nothing and the section rendered as a heading over blank space
    * with a note pointing elsewhere — a worse answer than showing the last thing
    * she did, however long ago. So if the window comes up empty the newest
@@ -197,7 +197,7 @@ function BroadcastCard({ item, fallbackIndex }: { item: ContentItem; fallbackInd
 
         <span className="min-w-0">
           {item.live && (
-            <span className="mb-1.5 inline-flex items-center gap-1.5 rounded-pill bg-cocoa px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-bg">
+            <span className="mb-1.5 inline-flex items-center gap-1.5 rounded-pill bg-obsidian px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-bg">
               {/* A real semantic state read from the channel, which is the one
                   case where a status dot belongs. */}
               <span className="relative flex size-2">

@@ -17,7 +17,7 @@ import type { Tweet } from "@/lib/useTweets";
 /**
  * Recent posts, newest first.
  *
- * The card is built from the site's own shapes rather than X's: a peach left
+ * The card is built from the site's own shapes rather than X's: a amethyst left
  * rule, the display face for the text, and the same border and radius tokens as
  * every other panel. Embedding X's own widget would drag in their styling and
  * their cookie banner, and would render a login wall for anyone not signed in.
@@ -214,7 +214,7 @@ function TweetBody({ text }: { text: string }) {
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              className="underline decoration-line-strong decoration-1 underline-offset-[3px] transition-colors hover:text-fg hover:decoration-peach focus-visible:outline-2 focus-visible:outline-offset-2"
+              className="underline decoration-line-strong decoration-1 underline-offset-[3px] transition-colors hover:text-fg hover:decoration-amethyst focus-visible:outline-2 focus-visible:outline-offset-2"
             >
               {part}
             </a>
@@ -249,9 +249,9 @@ function TweetCard({ tweet }: { tweet: Tweet }) {
     // No h-full. Cards size to their own content, so a post with no image does
     // not get stretched to match one that has a 16:9 image under it.
     <article className="relative flex flex-col overflow-hidden rounded-card border border-line bg-surface">
-      {/* Peach left rule. The one decorative touch, matching the pull-quote's
+      {/* Amethyst left rule. The one decorative touch, matching the pull-quote's
           treatment so the two read as the same family. */}
-      <span aria-hidden="true" className="absolute inset-y-0 left-0 w-[3px] bg-peach" />
+      <span aria-hidden="true" className="absolute inset-y-0 left-0 w-[3px] bg-amethyst" />
 
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-6 pb-3 pt-5 text-xs text-fg-subtle">
         <span className="font-mono">{channels.x.handle}</span>

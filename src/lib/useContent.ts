@@ -42,7 +42,7 @@ type State = {
 };
 
 /** When the snapshot's ages were measured, so the client can keep them honest. */
-const SNAPSHOT_AT = "2026-10-08T05:49:31.714Z";
+const SNAPSHOT_AT = "2026-10-09T13:12:56.177Z";
 
 /**
  * Bundled copies of the three lists, taken 2026-10-08.
@@ -54,52 +54,60 @@ const SNAPSHOT_AT = "2026-10-08T05:49:31.714Z";
  * the page that can go stale with no server to refresh it.
  */
 const SNAPSHOT_STREAMS: ContentItem[] = [
-  { videoId: "S6PD4T8H4Cw", url: "https://www.youtube.com/watch?v=S6PD4T8H4Cw", title: "『UNTIL THEN』kelanjutan setelah ketemu anak baru", thumbnail: "", live: false, viewers: null, age: null, duration: null },
-  { videoId: "bgnGUHwGNqs", url: "https://www.youtube.com/watch?v=bgnGUHwGNqs", title: "『KuloNiku: Bowl Up !』Pinter masak bakso = menantu idaman", thumbnail: "", live: false, viewers: null, age: null, duration: null },
-  { videoId: "XYDuOH8Q4-Y", url: "https://www.youtube.com/watch?v=XYDuOH8Q4-Y", title: "『RABUATIF』design apa ya tudayyy", thumbnail: "", live: false, viewers: null, age: null, duration: null },
-  { videoId: "8UlKFnlvo00", url: "https://www.youtube.com/watch?v=8UlKFnlvo00", title: "『UNTIL THEN』kali ini beneran main until then", thumbnail: "", live: false, viewers: null, age: null, duration: null },
-  { videoId: "M1ANn11KH2Q", url: "https://www.youtube.com/watch?v=M1ANn11KH2Q", title: "『PHASMOPHOBIA』nakutin atau ditakutin? ft. SilveragonAri dan RayRxyz", thumbnail: "", live: false, viewers: null, age: null, duration: null },
-  { videoId: "j533fLKIn4k", url: "https://www.youtube.com/watch?v=j533fLKIn4k", title: "『NOBAR』sapi-sapi apa yang nempel di dinding? sapidermen", thumbnail: "", live: false, viewers: null, age: null, duration: null },
-  { videoId: "618FhJnhs8g", url: "https://www.youtube.com/watch?v=618FhJnhs8g", title: "『GARTIC.IO』tebak gambar apa tebak perasaan?", thumbnail: "", live: false, viewers: null, age: null, duration: null },
-  { videoId: "It9c17pa3UY", url: "https://www.youtube.com/watch?v=It9c17pa3UY", title: "『Super Market Simulator』until then ngecrash", thumbnail: "", live: false, viewers: null, age: null, duration: null },
+  { videoId: "PQOWJ089Ndc", url: "https://www.youtube.com/watch?v=PQOWJ089Ndc", title: "「Plants vs. Zombies 2 Gardendless」map babi", thumbnail: "", live: false, viewers: null, age: null, duration: null },
+  { videoId: "2Jkc4TNrdV4", url: "https://www.youtube.com/watch?v=2Jkc4TNrdV4", title: "「FREE TALK」heehh😏", thumbnail: "", live: false, viewers: null, age: null, duration: null },
+  { videoId: "2hViTpQCIsY", url: "https://www.youtube.com/watch?v=2hViTpQCIsY", title: "「DRAWING STREAM」udah lupa cara gambar keknya....", thumbnail: "", live: false, viewers: null, age: null, duration: null },
+  { videoId: "iaQi4gKZkTM", url: "https://www.youtube.com/watch?v=iaQi4gKZkTM", title: "「Plants vs. Zombies 2 Gardendless」MAP CHINA CABE LIMA HOTMAXXING", thumbnail: "", live: false, viewers: null, age: null, duration: null },
+  { videoId: "acwRjdb20ww", url: "https://www.youtube.com/watch?v=acwRjdb20ww", title: "「 Dungeon Karaoke 」nyanyi lagu indo", thumbnail: "", live: false, viewers: null, age: null, duration: null },
+  { videoId: "DWWqB8_P0O8", url: "https://www.youtube.com/watch?v=DWWqB8_P0O8", title: "「FREE TALK」besok hari terakhir....po merch😢😭", thumbnail: "", live: false, viewers: null, age: null, duration: null },
+  { videoId: "s7JCfMKFZNI", url: "https://www.youtube.com/watch?v=s7JCfMKFZNI", title: "「Plants vs. Zombies 2 Gardendless」MAP GAMPANG 15 MENIT KELAR", thumbnail: "", live: false, viewers: null, age: null, duration: null },
+  { videoId: "onrgg06AQwg", url: "https://www.youtube.com/watch?v=onrgg06AQwg", title: "「 Dungeon Karaoke 」nyanyii selain dry flower", thumbnail: "", live: false, viewers: null, age: null, duration: null },
 ];
 
 const SNAPSHOT_VIDEOS: ContentItem[] = [
-  { videoId: "iO2_xI8y6OQ", url: "https://www.youtube.com/watch?v=iO2_xI8y6OQ", title: "Aku dan Dirimu - Cover by Mizu Hamzazu & @naplive7", thumbnail: "", live: false, viewers: null, age: null, duration: null },
-  { videoId: "KjhKjXLqO0s", url: "https://www.youtube.com/watch?v=KjhKjXLqO0s", title: "【ROLEPLAY】Sayang? Masih Bangun?", thumbnail: "", live: false, viewers: null, age: null, duration: null },
-  { videoId: "YcAqZoRfJII", url: "https://www.youtube.com/watch?v=YcAqZoRfJII", title: "Kaktus - Suara Kayu, Cover by Mizu Hamzazu", thumbnail: "", live: false, viewers: null, age: null, duration: null },
-  { videoId: "qkVWgPhqo7g", url: "https://www.youtube.com/watch?v=qkVWgPhqo7g", title: "Would You Be So Kind, Cover oleh Mizu Hamzazu", thumbnail: "", live: false, viewers: null, age: null, duration: null },
-  { videoId: "W_Ze-4gYSBU", url: "https://www.youtube.com/watch?v=W_Ze-4gYSBU", title: "Will You come to my special day?", thumbnail: "", live: false, viewers: null, age: null, duration: null },
-  { videoId: "9y7f7ntlNtY", url: "https://www.youtube.com/watch?v=9y7f7ntlNtY", title: "【ROLEPLAY】Kamu Manggil Aku Lagi, Boss?", thumbnail: "", live: false, viewers: null, age: null, duration: null },
+  { videoId: "k39PreAwbCk", url: "https://www.youtube.com/watch?v=k39PreAwbCk", title: "Wo Ai Ni - Shanghai Crab- (Cover by Deidey)", thumbnail: "", live: false, viewers: null, age: null, duration: null },
+  { videoId: "lYlFvtJn2ew", url: "https://www.youtube.com/watch?v=lYlFvtJn2ew", title: "ILLIT 'NOT CUTE ANYMORE’ - Versi Indonesia by Deidey x Yuura x Silvia", thumbnail: "", live: false, viewers: null, age: null, duration: null },
+  { videoId: "bgyEFFoYwrM", url: "https://www.youtube.com/watch?v=bgyEFFoYwrM", title: "JANE DOE - Kenshi Yonezu, Hikaru Utada \"The Movie: Reze Arc\" (Cover by Deidey)", thumbnail: "", live: false, viewers: null, age: null, duration: null },
+  { videoId: "3cK7DxKTqnY", url: "https://www.youtube.com/watch?v=3cK7DxKTqnY", title: "「MV」Andromeda - Hoshimachi Suisei (Cover by Deidey)", thumbnail: "", live: false, viewers: null, age: null, duration: null },
+  { videoId: "7qgXV_5dc1g", url: "https://www.youtube.com/watch?v=7qgXV_5dc1g", title: "Satu Bulan - Bernadya (Cover by Deidey)", thumbnail: "", live: false, viewers: null, age: null, duration: null },
+  { videoId: "vjyPEkMGP3U", url: "https://www.youtube.com/watch?v=vjyPEkMGP3U", title: "「Deidey's Lore」Episode 1 : Rabbit Warrior ✦", thumbnail: "", live: false, viewers: null, age: null, duration: null },
+  { videoId: "3Ajj0ri73vw", url: "https://www.youtube.com/watch?v=3Ajj0ri73vw", title: "「Original Song」Stand One's Ground - Deidey", thumbnail: "", live: false, viewers: null, age: null, duration: null },
+  { videoId: "_z-o_VbfiIA", url: "https://www.youtube.com/watch?v=_z-o_VbfiIA", title: "【2.0 DEBUT PV】Deidey New Journey", thumbnail: "", live: false, viewers: null, age: null, duration: null },
+  { videoId: "_UEJlemiyJY", url: "https://www.youtube.com/watch?v=_UEJlemiyJY", title: "ku kira kau rumah (AMIGDALA)", thumbnail: "", live: false, viewers: null, age: null, duration: null },
+  { videoId: "IImIgcqDUMQ", url: "https://www.youtube.com/watch?v=IImIgcqDUMQ", title: "「Deidey Original BGM」Starry Bubbles", thumbnail: "", live: false, viewers: null, age: null, duration: null },
+  { videoId: "HtZ-UqpUZYU", url: "https://www.youtube.com/watch?v=HtZ-UqpUZYU", title: "「COVER」 Komorebi 「木漏れ日」 - Chloe Pawapua ft. Achlys  / Deidey cover. #deylist", thumbnail: "", live: false, viewers: null, age: null, duration: null },
+  { videoId: "sksujHqhDn0", url: "https://www.youtube.com/watch?v=sksujHqhDn0", title: "Oh! Asmara - Kobo Kanaeru (Cover by Deidey)", thumbnail: "", live: false, viewers: null, age: null, duration: null },
 ];
 
 const SNAPSHOT_CLIPS: ContentItem[] = [
-  { videoId: "HX3YxahVsQY", url: "https://www.youtube.com/watch?v=HX3YxahVsQY", title: "Bang Al Buat Kak Tri Salting Gak Karuan", thumbnail: "", live: false, viewers: null, age: null, duration: null, channel: "Exile Syahputra" },
-  { videoId: "ERx7I0-inKY", url: "https://www.youtube.com/watch?v=ERx7I0-inKY", title: "Kak Tri Ngedate Bersama Bang Al Ternyata?", thumbnail: "", live: false, viewers: null, age: null, duration: null, channel: "Exile Syahputra" },
-  { videoId: "3HrLBePvVbc", url: "https://www.youtube.com/watch?v=3HrLBePvVbc", title: "Kak Tri Juga Cinta Bang Al Seperti Mizu?", thumbnail: "", live: false, viewers: null, age: null, duration: null, channel: "Exile Syahputra" },
-  { videoId: "FNDvvq3H8OU", url: "https://www.youtube.com/watch?v=FNDvvq3H8OU", title: "Mizu Aku Cinta Kamu", thumbnail: "", live: false, viewers: null, age: null, duration: null, channel: "putra clip" },
+  { videoId: "qpox95odcr4", url: "https://www.youtube.com/watch?v=qpox95odcr4", title: "Mediashare nya Semakin Liar Dawg【Deidey】", thumbnail: "", live: false, viewers: null, age: null, duration: null, channel: "Invisible Ch." },
+  { videoId: "l7xe91bVw6k", url: "https://www.youtube.com/watch?v=l7xe91bVw6k", title: "Berbagai Kelakuan Mediashare Yang Membuat Ketua Salfok【Deidey】", thumbnail: "", live: false, viewers: null, age: null, duration: null, channel: "Invisible Ch." },
 ];
 
 /** Ages as measured at capture time, in seconds. */
 const SNAPSHOT_AGES: Record<string, number> = {
-  S6PD4T8H4Cw: 3600,
-  bgnGUHwGNqs: 64800,
-  "XYDuOH8Q4-Y": 86400,
-  "8UlKFnlvo00": 86400,
-  M1ANn11KH2Q: 172800,
-  j533fLKIn4k: 172800,
-  "618FhJnhs8g": 259200,
-  It9c17pa3UY: 432000,
-  iO2_xI8y6OQ: 36000,
-  KjhKjXLqO0s: 2592000,
-  YcAqZoRfJII: 2592000,
-  qkVWgPhqo7g: 5184000,
-  "W_Ze-4gYSBU": 5184000,
-  "9y7f7ntlNtY": 7776000,
-  HX3YxahVsQY: 10368000,
-  "ERx7I0-inKY": 20736000,
-  "3HrLBePvVbc": 20736000,
-  FNDvvq3H8OU: 31536000,
+  PQOWJ089Ndc: 68400,
+  "2Jkc4TNrdV4": 259200,
+  "2hViTpQCIsY": 432000,
+  iaQi4gKZkTM: 604800,
+  acwRjdb20ww: 777600,
+  DWWqB8_P0O8: 864000,
+  s7JCfMKFZNI: 1209600,
+  onrgg06AQwg: 1209600,
+  k39PreAwbCk: 1814400,
+  lYlFvtJn2ew: 12960000,
+  bgyEFFoYwrM: 23328000,
+  "3cK7DxKTqnY": 25920000,
+  "7qgXV_5dc1g": 31536000,
+  vjyPEkMGP3U: 31536000,
+  "3Ajj0ri73vw": 31536000,
+  "_z-o_VbfiIA": 31536000,
+  _UEJlemiyJY: 63072000,
+  IImIgcqDUMQ: 94608000,
+  "HtZ-UqpUZYU": 94608000,
+  sksujHqhDn0: 94608000,
+  qpox95odcr4: 5184000,
+  l7xe91bVw6k: 18144000,
 };
 
 const SECOND = 1000;

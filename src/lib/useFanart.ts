@@ -47,7 +47,7 @@ export function useFanart(): State {
   const [state, setState] = useState<State>({
     fanart: [],
     reason: "loading",
-    searchUrl: "https://x.com/search?q=%23ForMizu&src=typed_query&f=live",
+    searchUrl: "https://x.com/search?q=%23Deyillust&src=typed_query&f=live",
   });
 
   useEffect(() => {

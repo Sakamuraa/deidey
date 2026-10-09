@@ -10,16 +10,23 @@ const BASE =
   "disabled:pointer-events-none disabled:opacity-55";
 
 /**
- * `primary` is the cocoa fill. Chosen over a peach fill because the brand's own
- * peach (#DCA08A) only reaches 3.5:1 against the ink, which fails as a button
- * background. Cocoa on peach is 6.4:1.
+ * `primary` is the obsidian fill: near-white in the dark theme, near-black in
+ * the light one, always the furthest available colour from the ground it sits
+ * on. 12.6:1 dark, 13.3:1 light.
+ *
+ * Chosen over a lavender fill, which is the brand highlight and the obvious
+ * candidate. #B39DDB against the dark ground is 6.2:1 -- fine for text -- but a
+ * filled button needs its label to clear 4.5:1 against *the fill itself*, and
+ * the only ink that does so on lavender is the shadow tone, which turns the
+ * button into a dark shape in the one place the theme is trying to be light.
+ * Obsidian keeps the fill neutral and leaves the lavender to the accents.
  */
 const VARIANTS: Record<Variant, string> = {
-  primary: "bg-cocoa text-bg hover:bg-milk hover:text-bg",
+  primary: "bg-obsidian text-bg hover:bg-silvermist hover:text-bg",
   // Transparent with a real 1px stroke. The stroke is load-bearing: without it
   // the button disappears into the page.
-  quiet: "border border-line-strong text-fg hover:bg-surface hover:border-milk",
-  link: "text-fg underline decoration-line-strong decoration-2 underline-offset-[6px] hover:decoration-milk rounded-none",
+  quiet: "border border-line-strong text-fg hover:bg-surface hover:border-silvermist",
+  link: "text-fg underline decoration-line-strong decoration-2 underline-offset-[6px] hover:decoration-silvermist rounded-none",
 };
 
 const SIZES: Record<Size, string> = {

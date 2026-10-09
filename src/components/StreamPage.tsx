@@ -65,7 +65,7 @@ export function StreamPage() {
   const heading = item?.title ?? chat.title;
 
   useEffect(() => {
-    if (heading) document.title = `${heading} - Mizu Hamzazu`;
+    if (heading) document.title = `${heading} - Deidey`;
   }, [heading]);
 
   if (!id) return <Missing />;
@@ -164,11 +164,11 @@ function Player({
   }, [started, currentTime, onPlayback]);
 
   return (
-    <div className="aspect-video w-full overflow-hidden rounded-card border border-line bg-cocoa">
+    <div className="aspect-video w-full overflow-hidden rounded-card border border-line bg-obsidian">
       <div
         ref={mountRef}
         className="size-full [&>iframe]:size-full [&>iframe]:border-0"
-        title="Pemutar broadcast Mizu Hamzazu"
+        title="Pemutar broadcast Deidey"
       />
     </div>
   );
@@ -182,7 +182,7 @@ function MetaRow({ item }: { item: ContentItem | null }) {
   return (
     <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-fg-subtle">
       {item.live && (
-        <span className="inline-flex items-center gap-1.5 rounded-pill bg-cocoa px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-bg">
+        <span className="inline-flex items-center gap-1.5 rounded-pill bg-obsidian px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-bg">
           <span className="relative flex size-1.5">
             <span className="absolute inline-flex size-full animate-ping rounded-full bg-bg opacity-75" />
             <span className="relative inline-flex size-1.5 rounded-full bg-bg" />
@@ -394,19 +394,19 @@ function ChatPanel({
                     className="mt-0.5 h-7 w-7 shrink-0 rounded-full"
                   />
                 ) : (
-                  <span className="mt-0.5 h-7 w-7 shrink-0 rounded-full bg-peach-soft" />
+                  <span className="mt-0.5 h-7 w-7 shrink-0 rounded-full bg-accent-soft" />
                 )}
 
                 <div className="min-w-0 flex-1">
                   <p className="flex flex-wrap items-baseline gap-x-2 text-xs">
                     <span className="font-semibold text-fg">{m.author || "Tanpa nama"}</span>
                     {m.badge === "member" && (
-                      <span className="rounded-full bg-peach-soft px-1.5 py-px text-[0.625rem] font-medium text-shadow">
+                      <span className="rounded-full bg-accent-soft px-1.5 py-px text-[0.625rem] font-medium text-fg">
                         Member
                       </span>
                     )}
                     {m.badge === "paid" && (
-                      <span className="rounded-full bg-peach px-1.5 py-px text-[0.625rem] font-medium text-white">
+                      <span className="rounded-full bg-amethyst px-1.5 py-px text-[0.625rem] font-medium text-glow">
                         Disokong
                       </span>
                     )}

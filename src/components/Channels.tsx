@@ -4,7 +4,7 @@ import { channels } from "@/content/site";
 import { Reveal } from "@/lib/reveal";
 
 /**
- * Channel links as a full-bleed peach band. Layout family: one wide statement
+ * Channel links as a full-bleed amethyst band. Layout family: one wide statement
  * row per channel, not cards. Kept separate from the upload grid above so the
  * page does not repeat a card layout twice in a row.
  */
@@ -24,11 +24,11 @@ const ROWS = [
     url: channels.x.url,
   },
   {
-    key: "trakteer",
-    label: channels.trakteer.label,
-    handle: channels.trakteer.handle,
-    note: channels.trakteer.note,
-    url: channels.trakteer.url,
+    key: "shopee",
+    label: channels.shopee.label,
+    handle: channels.shopee.handle,
+    note: channels.shopee.note,
+    url: channels.shopee.url,
   },
 ];
 
@@ -56,7 +56,7 @@ export function Channels({ standalone = false }: { standalone?: boolean } = {}) 
             id="channels-heading"
             className="max-w-[18ch] text-3xl font-semibold leading-tight tracking-tight md:text-4xl"
           >
-            Di mana Mizu bisa ditemukan
+            Di mana Deidey bisa ditemukan
           </Heading>
         </Reveal>
 

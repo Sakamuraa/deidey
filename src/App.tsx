@@ -83,7 +83,7 @@ export default function App() {
       {/* One main, one skip target, on every route. */}
       <a
         href="#konten"
-        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-btn focus:bg-cocoa focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-bg"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-btn focus:bg-obsidian focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-bg"
       >
         Lompat ke konten
       </a>

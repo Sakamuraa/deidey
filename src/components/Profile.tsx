@@ -50,7 +50,7 @@ export function Profile({ detail = false }: { detail?: boolean } = {}) {
               id="profile-heading"
               className="mt-4 text-3xl font-semibold leading-tight tracking-tight md:text-4xl"
             >
-              Tentang Mizu
+              Tentang Deidey
             </Heading>
             <p className="mt-5 max-w-[58ch] text-base leading-relaxed text-fg-muted md:text-lg">
               Halaman ini mengumpulkan apa yang tertulis tentang dirinya, dan
@@ -61,25 +61,26 @@ export function Profile({ detail = false }: { detail?: boolean } = {}) {
 
         <div className={`grid gap-14 md:grid-cols-12 md:gap-12 ${detail ? "mt-16" : ""}`}>
           <Reveal className="md:col-span-5" amount={0.3}>
-            {/* Verbatim from the X bio: "Hamster Princess". A subheading here
-                because the h1 above already exists on the detail route. */}
+            {/* Verbatim from the X bio: "Isekai Rabbit Warrior Vtuber". A
+                subheading here because the h1 above already exists on the
+                detail route. */}
             {detail ? (
               <h2 className="text-3xl font-semibold leading-tight tracking-tight md:text-4xl">
-                Hamster Princess
+                Rabbit Warrior
               </h2>
             ) : (
               <h2
                 id="profile-heading"
                 className="text-3xl font-semibold leading-tight tracking-tight md:text-4xl"
               >
-                Hamster Princess
+                Rabbit Warrior
               </h2>
             )}
 
-            <figure className="mt-8 border-l-2 border-peach pl-5">
-              <CrownSimple size={22} className="text-milk" aria-hidden="true" />
+            <figure className="mt-8 border-l-2 border-amethyst pl-5">
+              <CrownSimple size={22} className="text-silvermist" aria-hidden="true" />
               <blockquote className="mt-3 font-display text-xl leading-relaxed">
-                Kenalin aku Mizu, salah satu putri dari kerajaan hamzazu!
+                Greetings! I am the elite warrior from Praedisium ready for duty.
               </blockquote>
               <figcaption className="mt-3 text-sm text-fg-subtle">
                 Dari deskripsi channel YouTube, ditulis sendiri olehnya.
@@ -151,7 +152,7 @@ export function Profile({ detail = false }: { detail?: boolean } = {}) {
           <div className="grid gap-14 md:grid-cols-12 md:gap-12">
             <div className="md:col-span-5">
               <h3 className="flex items-center gap-2.5 text-2xl font-semibold tracking-tight">
-                <PersonSimple size={22} className="text-milk" aria-hidden="true" />
+                <PersonSimple size={22} className="text-silvermist" aria-hidden="true" />
                 Credit karakter
               </h3>
               <dl className="mt-6">
@@ -169,7 +170,7 @@ export function Profile({ detail = false }: { detail?: boolean } = {}) {
 
             <div className="md:col-span-6 md:col-start-7">
               <h3 className="flex items-center gap-2.5 text-2xl font-semibold tracking-tight">
-                <Palette size={22} className="text-milk" aria-hidden="true" />
+                <Palette size={22} className="text-silvermist" aria-hidden="true" />
                 Seri yang dijalankan
               </h3>
               {/* Single column on every width. Two columns overflowed the shell

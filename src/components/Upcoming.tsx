@@ -19,8 +19,8 @@ import type { ContentItem } from "@/lib/useContent";
  *
  * Two colour decisions worth stating, both of which were wrong first:
  *
- * The wash over the thumbnail is a fixed ink, not `--cocoa` or `--fg`. Both of
- * those flip between themes here -- `--cocoa` is near-black in the light theme
+ * The wash over the thumbnail is a fixed ink, not `--obsidian` or `--fg`. Both of
+ * those flip between themes here -- `--obsidian` is near-black in the light theme
  * and near-white in the dark one -- so a wash built on either lightens the image
  * in one theme and darkens it in the other. An overlay's only job is to darken.
  *

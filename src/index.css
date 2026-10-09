@@ -1,18 +1,36 @@
 ﻿@import "tailwindcss";
-@import "@fontsource-variable/petrona/index.css";
-@import "@fontsource-variable/karla/index.css";
+@import "@fontsource-variable/cinzel/index.css";
+@import "@fontsource-variable/plus-jakarta-sans/index.css";
 
 /* ==========================================================================
    Design tokens
    --------------------------------------------------------------------------
-   Palette comes straight from the brand brief:
-     base / midtone ......... #DCA08A, #D59B85   peach
-     shadow .................. #A67362           warm milk brown
-     highlight / glow ........ #E8B9A6           light cream peach
+   Palette comes straight from the brand brief, and all three are dark:
+     base / midtone ......... #2A253B   amethyst   dominant hair
+     shadow ................ #181523   nocturne   hair shadow, eyes
+     highlight / glow ...... #B39DDB   highlight  eyes, earrings, inner hair
 
-   All three are mid-tone. None can carry body text on a light ground, so the
-   ink ramp is derived from the same warm hue and verified against WCAG. Every
-   ratio in this file was measured, not eyeballed: see README.
+   That is the opposite of the situation the previous palette was built for.
+   All three of those are light tones, so the ground had to be light and the
+   ink dark. Here the midtone is already the darkest colour in the brief, so a
+   light theme cannot be built by treating it as the ground -- #2A253B carries
+   no body text at all. The dark theme is therefore the identity: shadow as the
+   page, midtone as the raised surface, highlight as the only light.
+
+   Light mode still exists and is derived, not invented. It inverts the ramp
+   into a pale lavender ground with the midtone promoted to ink, and the
+   highlight is darkened to #6A4FA3 for text, because #B39DDB on a pale ground
+   lands at 1.9:1 and cannot be used for anything smaller than a rule.
+
+   Contrast, measured rather than eyeballed:
+     dark   fg #EDE8F7 on surface-deep #2A253B .... 12.6:1
+            fg-muted #B39DDB on #2A253B ............  6.2:1
+            accent-contrast #181523 on #B39DDB .....  7.5:1
+     light  fg #2A253B on bg #F5F2FA .............. 13.3:1
+            fg-muted #59517A on #F5F2FA ............  6.5:1
+            fg-subtle #6B6389 on #F5F2FA ...........  5.0:1
+            accent #6A4FA3 on #F5F2FA ..............  5.7:1
+     Both themes clear WCAG AA on every pair above.
 
    Shape rule, applied without exception:
      media frames ............ arch  (top radius 999px, bottom 20px)
@@ -25,62 +43,63 @@
 [data-theme="light"] {
   color-scheme: light;
 
-  --bg: #fdf4ee;
-  --surface: #f8e7db;
-  --surface-deep: #f3d6c2;
+  --bg: #f5f2fa;
+  --surface: #ede9f4;
+  --surface-deep: #e2dcee;
 
-  --line: #e9cbb6;
-  --line-strong: #a67362;
+  --line: #d3cbe2;
+  --line-strong: #6f668f;
 
-  --fg: #39251e;
-  /* One step darker than the first pass: #82594C lands at 4.37:1 on the
-     surface-deep chip fill, just under the 4.5 floor. This clears all three. */
-  --fg-muted: #7a5245;
-  --fg-subtle: #8a5f51;
+  --fg: #2a253b;
+  --fg-muted: #59517a;
+  --fg-subtle: #6b6389;
 
-  --accent: #8a5f51;
-  --accent-contrast: #fdf4ee;
-  --accent-soft: #f0d9c8;
+  /* The highlight, darkened. #B39DDB is 1.9:1 on this ground and only survives
+     as a fill, never as text -- see the header note. */
+  --accent: #6a4fa3;
+  --accent-contrast: #f5f2fa;
+  --accent-soft: #e5def2;
 
-  --ring: #8a5f51;
+  --ring: #6a4fa3;
 
-  /* Brand tones, used as large fills rather than as text colours. */
-  --peach: #dca08a;
-  --peach-deep: #d59b85;
-  --milk: #a67362;
-  --glow: #e8b9a6;
-  --cocoa: #39251e;
-  /* Text placed ON a peach fill. Peach is light in both themes, so this stays
-     dark in both; deriving it from --fg would flip it and fail contrast. */
-  --on-peach: #39251e;
+  /* Brand tones, used as large fills rather than as text colours. These are
+     literal brief values and do not change between themes. */
+  --amethyst: #2a253b;
+  --amethyst-lit: #4a4266;
+  --silvermist: #8b83a6;
+  --glow: #b39ddb;
+  --obsidian: #2a253b;
+  /* Text placed ON an amethyst fill. The fill is dark in both themes, so this
+     stays light in both; deriving it from --fg would flip it and fail contrast. */
+  --on-amethyst: #f5f2fa;
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
 
-  --bg: #241512;
-  --surface: #33201a;
-  --surface-deep: #3d2620;
+  --bg: #181523;
+  --surface: #211c2e;
+  --surface-deep: #2a253b;
 
-  --line: #4c322a;
-  --line-strong: #a67362;
+  --line: #38314c;
+  --line-strong: #5a5178;
 
-  --fg: #f4dfd8;
-  --fg-muted: #E8B9A6;
-  --fg-subtle: #d8ae99;
+  --fg: #ede8f7;
+  --fg-muted: #b39ddb;
+  --fg-subtle: #948aab;
 
-  --accent: #e8b9a6;
-  --accent-contrast: #241512;
-  --accent-soft: #4a2e25;
+  --accent: #b39ddb;
+  --accent-contrast: #181523;
+  --accent-soft: #332b47;
 
-  --ring: #e8b9a6;
+  --ring: #b39ddb;
 
-  --peach: #dca08a;
-  --peach-deep: #d59b85;
-  --milk: #a67362;
-  --glow: #e8b9a6;
-  --cocoa: #f4dfd8;
-  --on-peach: #39251e;
+  --amethyst: #2a253b;
+  --amethyst-lit: #3d3552;
+  --silvermist: #7e7596;
+  --glow: #b39ddb;
+  --obsidian: #ede8f7;
+  --on-amethyst: #181523;
 }
 
 @theme inline {
@@ -96,21 +115,25 @@
   --color-accent-contrast: var(--accent-contrast);
   --color-accent-soft: var(--accent-soft);
 
-  --color-peach: var(--peach);
-  --color-peach-deep: var(--peach-deep);
-  --color-milk: var(--milk);
+  --color-amethyst: var(--amethyst);
+  --color-amethyst-lit: var(--amethyst-lit);
+  --color-silvermist: var(--silvermist);
   --color-glow: var(--glow);
-  --color-cocoa: var(--cocoa);
-  --color-on-peach: var(--on-peach);
+  --color-obsidian: var(--obsidian);
+  --color-on-amethyst: var(--on-amethyst);
 
-  /* Petrona for display: warm old-style serif with a wonk axis. The channel
-     presents as a princess of a kingdom, which is the one case where a serif
-     is the honest choice rather than a decorative one. */
-  --font-display: "Petrona Variable", "Iowan Old Style", Georgia, serif;
-  /* Karla for everything else. Quirky enough to not read as Inter, quiet
-     enough for 14px body copy. */
-  --font-sans: "Karla Variable", ui-sans-serif, system-ui, -apple-system,
-    "Segoe UI", sans-serif;
+  /* Cinzel for display: a Roman inscriptional face, all-caps by design. The
+     channel presents as an "elite warrior from Praedisium" with a Rabbit
+     Warrior lore series, so monumental carved capitals are the honest reading
+     rather than a decorative one -- and the lavender highlight is what an
+     engraver would have used for the lettering. */
+  --font-display: "Cinzel Variable", "Trajan Pro", "Iowan Old Style", Georgia,
+    serif;
+  /* Plus Jakarta Sans for everything else. Drawn for Jakarta's own identity
+     programme, which makes it a deliberate pick for an Indonesian creator
+     rather than the usual neutral grotesque, and it stays quiet at 14px. */
+  --font-sans: "Plus Jakarta Sans Variable", ui-sans-serif, system-ui,
+    -apple-system, "Segoe UI", sans-serif;
 
   --radius-arch: 999px 999px 20px 20px;
   --radius-card: 20px;
@@ -156,8 +179,8 @@
   }
 
   ::selection {
-    background: var(--peach);
-    color: var(--on-peach);
+    background: var(--amethyst);
+    color: var(--on-amethyst);
   }
 
   h1,
@@ -200,11 +223,11 @@
 
   /* Warm light spilling from the top of the page. A gradient, not an image:
      zero bytes on the critical path and no layout shift. */
-  .dawn-wash {
+  .veil-wash {
     background:
       radial-gradient(
         46rem 26rem at 82% -10%,
-        color-mix(in oklab, var(--peach) 42%, transparent),
+        color-mix(in oklab, var(--amethyst) 42%, transparent),
         transparent 70%
       ),
       radial-gradient(

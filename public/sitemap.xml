@@ -1,8 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>https://mizuhamzazu.vtube-info.xyz/</loc>
-    <changefreq>monthly</changefreq>
-    <priority>1.0</priority>
-  </url>
+  <url><loc>https://deidey.vtube-info.xyz/</loc></url>
+  <url><loc>https://deidey.vtube-info.xyz/tentang</loc></url>
+  <url><loc>https://deidey.vtube-info.xyz/konten</loc></url>
+  <url><loc>https://deidey.vtube-info.xyz/konten/streams</loc></url>
+  <url><loc>https://deidey.vtube-info.xyz/konten/video</loc></url>
+  <url><loc>https://deidey.vtube-info.xyz/konten/clips</loc></url>
+  <url><loc>https://deidey.vtube-info.xyz/tweets</loc></url>
+  <url><loc>https://deidey.vtube-info.xyz/fanart</loc></url>
+  <url><loc>https://deidey.vtube-info.xyz/channel</loc></url>
 </urlset>

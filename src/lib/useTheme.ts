@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 export type Theme = "dark" | "light";
 
-const STORAGE_KEY = "mizu-theme";
+const STORAGE_KEY = "deidey-theme";
 
 function readTheme(): Theme {
   if (typeof document === "undefined") return "dark";

@@ -28,7 +28,7 @@ export function Hero() {
 
   return (
     <section id="atas" className="relative isolate overflow-hidden" aria-labelledby="hero-name">
-      <div aria-hidden="true" className="dawn-wash absolute inset-0 -z-10" />
+      <div aria-hidden="true" className="veil-wash absolute inset-0 -z-10" />
 
       <div className="shell grid min-h-[calc(100dvh-4rem)] items-center gap-12 py-14 md:grid-cols-12 md:gap-10 md:py-20">
         <div className="md:col-span-7">
@@ -65,7 +65,7 @@ export function Hero() {
             className="overflow-hidden rounded-arch border border-line-strong bg-surface-deep"
             style={{
               boxShadow:
-                "0 24px 60px -28px color-mix(in oklab, var(--milk) 60%, transparent)",
+                "0 24px 60px -28px color-mix(in oklab, var(--silvermist) 60%, transparent)",
             }}
           >
             <img

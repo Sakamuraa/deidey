@@ -1,14 +1,14 @@
 /**
  * GET /api/tweets
  *
- * Recent posts from x.com/mizuhamzazu, newest first, via Nitter's RSS feed.
+ * Recent posts from x.com/deidey16_, newest first, via Nitter's RSS feed.
  *
  * X itself offers no anonymous timeline. Measured from this server, every direct
  * route fails:
  *
  *   | route                                        | result                      |
  *   |----------------------------------------------|-----------------------------|
- *   | x.com/mizuhamzazu (page HTML)                | 200, 136 KB, zero tweet text |
+ *   | x.com/deidey16_ (page HTML)                | 200, 136 KB, zero tweet text |
  *   | syndication.twitter.com timeline-profile     | 429                         |
  *   | cdn.syndication.twimg.com widgets/timelines  | 200, zero tweets            |
  *   | guest-token flow (activate + UserTweets)     | 401 on activate             |
@@ -47,8 +47,8 @@ interface TweetsResponse {
   json(body: unknown): void;
 }
 
-const SCREEN_NAME = "mizuhamzazu";
-const HANDLE = "@mizuhamzazu";
+const SCREEN_NAME = "deidey16_";
+const HANDLE = "@deidey16_";
 
 /**
  * Read in order, rotating. Order is preference, not a health check: the first
