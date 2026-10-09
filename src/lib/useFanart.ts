@@ -45,6 +45,15 @@ type State = {
   nextCursor: string | null;
   /** True while a "load more" is in flight, so the button cannot be double-fired. */
   loadingMore: boolean;
+  /**
+   * How many items the first response carried.
+   *
+   * Everything past this index was appended after the grid had already animated
+   * in, so it has to skip its entrance -- see the note on StaggerItem's
+   * `immediate`. Kept across later polls so a shorter refresh cannot move the
+   * boundary and re-animate rows already on screen.
+   */
+  initialCount: number;
 };
 
 /** Kept in step with api/fanart.ts so the two cannot disagree on page size. */
@@ -103,6 +112,7 @@ export function useFanart(): State & { loadMore: () => void } {
     searchUrl: "https://x.com/search?q=%23Deyillust&src=typed_query&f=live",
     nextCursor: null,
     loadingMore: false,
+    initialCount: 0,
   });
 
   // Kept in a ref rather than read from state inside loadMore: the callback has
@@ -133,6 +143,7 @@ export function useFanart(): State & { loadMore: () => void } {
           searchUrl: payload.searchUrl ?? prev.searchUrl,
           nextCursor: payload.nextCursor ?? null,
           loadingMore: false,
+          initialCount: prev.initialCount || list.length,
         }));
       } catch {
         if (controller.signal.aborted) return;

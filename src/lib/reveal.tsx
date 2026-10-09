@@ -79,17 +79,42 @@ export function StaggerItem({
   children,
   className,
   as = "div",
+  // Render already-revealed, skipping the entrance. See the note below.
+  immediate = false,
 }: {
   children: React.ReactNode;
   className?: string;
   as?: "div" | "li" | "article";
+  immediate?: boolean;
 }) {
   // No reduced-motion branch here on purpose: StaggerGroup sets
   // `initial: false` under the media query and the variants collapse with it.
   const Component = motion[as];
 
+  /*
+   * `immediate` exists for lists that grow after first paint.
+   *
+   * StaggerGroup animates on `whileInView` with `once: true`, so after the group
+   * has played it stays in the `visible` state forever. Children mounted into it
+   * afterwards inherit that state, but the parent's stagger transition was
+   * already consumed, so they resolve to `hidden` and sit at opacity 0 -- present
+   * in the DOM, correctly laid out, and completely invisible and unclickable.
+   * That is what "load more" on /fanart was doing: appending 16 perfect cards
+   * that rendered as nothing.
+   *
+   * `initial: false` tells Motion to skip straight to the animate state, so an
+   * appended item is visible on its first frame. It costs the entrance animation
+   * on those items, which is the right trade: an animation you cannot see is
+   * worse than no animation, and a card the visitor just asked for should not
+   * make them wait for it anyway.
+   */
   return (
-    <Component data-reveal="" className={className} variants={fadeUp}>
+    <Component
+      data-reveal=""
+      className={className}
+      variants={fadeUp}
+      {...(immediate ? { initial: false as const } : {})}
+    >
       {children}
     </Component>
   );

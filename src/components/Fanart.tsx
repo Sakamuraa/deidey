@@ -16,7 +16,8 @@ import type { Fanart } from "@/lib/useFanart";
  * read the feed, because a proxy dies with the instance and the art outlives it.
  */
 export function Fanart() {
-  const { fanart, reason, searchUrl, nextCursor, loadingMore, loadMore } = useFanart();
+  const { fanart, reason, searchUrl, nextCursor, loadingMore, initialCount, loadMore } =
+    useFanart();
 
   return (
     <section id="isi-fanart" aria-labelledby="fanart-heading" className="pt-24 pb-24 md:pt-32 md:pb-32">
@@ -42,8 +43,15 @@ export function Fanart() {
               stagger={0.04}
               amount={0.02}
             >
-              {fanart.map((item) => (
-                <StaggerItem key={item.id} className="min-w-0">
+              {fanart.map((item, index) => (
+                <StaggerItem
+                  key={item.id}
+                  className="min-w-0"
+                  // Anything past the first response was appended after the grid had already
+                  // animated in, so it renders in place rather than waiting for an entrance
+                  // that will never fire.
+                  immediate={index >= initialCount}
+                >
                   <FanartCard item={item} />
                 </StaggerItem>
               ))}
