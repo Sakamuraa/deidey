@@ -1,4 +1,4 @@
-﻿/**
+/**
  * GET /api/content
  *
  * Serves three lists from the channel plus the search index, read fresh on every
@@ -623,9 +623,20 @@ async function readClips(): Promise<ContentItem[]> {
  * development: the streams tab started returning 503 after a few dozen fetches,
  * which is exactly the failure a stale copy can paper over.
  */
-let lastGood: { payload: unknown; at: number; liveCount: number } | null = null;
+let lastGood: { payload: unknown; at: number; liveCount: number; upcoming: boolean } | null = null;
 const MEMORY_TTL_LIVE_MS = 10 * 60 * 1000;
 const MEMORY_TTL_QUIET_MS = 30 * 60 * 1000;
+/**
+ * Scheduled but not started.
+ *
+ * Deliberately the shortest of the three. A scheduled broadcast is the one piece
+ * of this data that is about to stop being true: the next request is the one
+ * that finds out whether it has started. Caching it on the quiet tier meant a
+ * stream could begin while the page still said "Mendatang", for as long as the
+ * cache lasted.
+ */
+const MEMORY_TTL_UPCOMING_MS = 20 * 1000;
+
 
 export default async function handler(req: UploadsRequest, res: UploadsResponse) {
   if (req.method && req.method !== "GET") {
@@ -638,14 +649,20 @@ export default async function handler(req: UploadsRequest, res: UploadsResponse)
   // stream is running that window is ten minutes, because that is the state a
   // visitor is watching change. Once it ends, half an hour is safe.
   if (lastGood) {
-    const ttl = lastGood.liveCount > 0 ? MEMORY_TTL_LIVE_MS : MEMORY_TTL_QUIET_MS;
+    const ttl = lastGood.upcoming
+      ? MEMORY_TTL_UPCOMING_MS
+      : lastGood.liveCount > 0
+        ? MEMORY_TTL_LIVE_MS
+        : MEMORY_TTL_QUIET_MS;
 
     if (Date.now() - lastGood.at < ttl) {
       res.setHeader(
         "Cache-Control",
-        lastGood.liveCount > 0
-          ? "public, s-maxage=300, stale-while-revalidate=600"
-          : "public, s-maxage=3600, stale-while-revalidate=86400",
+        lastGood.upcoming
+          ? "public, s-maxage=20, stale-while-revalidate=45"
+          : lastGood.liveCount > 0
+            ? "public, s-maxage=300, stale-while-revalidate=600"
+            : "public, s-maxage=3600, stale-while-revalidate=86400",
       );
       res.setHeader("X-Data-Source", "memory");
       res.status(200).json(lastGood.payload);
@@ -700,15 +717,17 @@ export default async function handler(req: UploadsRequest, res: UploadsResponse)
     upcoming,
   };
 
-  lastGood = { payload, at: Date.now(), liveCount };
+  lastGood = { payload, at: Date.now(), liveCount, upcoming: upcoming !== null };
 
   // A finished archive does not change for hours, so a quiet channel gets a long
   // edge window. Once something is running the cache drops to five minutes.
   res.setHeader(
     "Cache-Control",
-    liveCount > 0
-      ? "public, s-maxage=300, stale-while-revalidate=600"
-      : "public, s-maxage=3600, stale-while-revalidate=86400",
+    upcoming
+      ? "public, s-maxage=20, stale-while-revalidate=45"
+      : liveCount > 0
+        ? "public, s-maxage=300, stale-while-revalidate=600"
+        : "public, s-maxage=3600, stale-while-revalidate=86400",
   );
   res.setHeader("X-Data-Source", "live");
   res.status(200).json(payload);
