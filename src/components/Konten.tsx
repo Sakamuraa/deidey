@@ -2,6 +2,7 @@ import { Broadcast, FilmSlate, Scissors } from "@phosphor-icons/react";
 import { useState } from "react";
 
 import { ActionLink } from "@/components/Action";
+import { UpcomingCard } from "@/components/Upcoming";
 import { Reveal, StaggerGroup, StaggerItem } from "@/lib/reveal";
 import { ageLabel, useContent } from "@/lib/useContent";
 import type { ContentItem } from "@/lib/useContent";
@@ -65,7 +66,7 @@ const ORDER: Category[] = ["streams", "videos", "clips"];
  * their own paths.
  */
 export function Konten({ category = "streams" }: { category?: Category }) {
-  const { streams, videos, clips, live, source } = useContent();
+  const { streams, videos, clips, live, source, upcoming } = useContent();
 
   const active = CATEGORIES[category];
 
@@ -128,6 +129,13 @@ export function Konten({ category = "streams" }: { category?: Category }) {
         </Reveal>
 
         <div className="mt-10">
+          {/*
+            The next stream, above the list and only on the streams tab. It is a
+            different kind of claim from every card below it -- "not yet" rather
+            than "then" -- so it sits outside the grid rather than as one more
+            tile in it.
+          */}
+          {category === "streams" && <UpcomingCard item={upcoming} />}
           {list.length > 0 ? (
             <StaggerGroup
               key={category}

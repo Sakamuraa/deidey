@@ -141,6 +141,22 @@ const AGE_UNITS: Record<string, string> = {
  * shows nothing rather than something that could be read as a different amount of
  * time than YouTube meant.
  */
+/**
+ * A thumbnail badge whose text is the localised word for "upcoming".
+ *
+ * A scheduled broadcast sits in the same /streams grid as everything else, and
+ * this badge is the only thing marking it. Measured across four channels rather
+ * than assumed: read with hl=id the text is "Mendatang", and it appears on exactly
+ * the pages that carry a scheduled item.
+ *
+ * The match is on the text rather than on `badgeStyle`, because the duration
+ * badges and the members-only badge share that shape in the raw JSON and differ
+ * only in what they say. Several localisations are listed because `hl` is a
+ * request parameter, not a guarantee.
+ */
+const UPCOMING_BADGE =
+  /"text"\s*:\s*"(Mendatang|Upcoming|Akan dimulai|Terjadwal|Scheduled)"/i;
+
 function parseAge(text: string): string | null {
   const match = text.match(AGE);
   if (!match) return null;
@@ -253,12 +269,18 @@ interface ContentItem {
   duration: string | null;
   /** Channel that published it, on the clips tab only. */
   channel?: string;
+  /** Scheduled but not started. Separate from live: one is now, one is later. */
+  upcoming?: boolean;
+  /** Set when the stream belongs to another channel, so a card can say so. */
+  demoChannel?: string;
 }
 
 interface LockupEntry {
   videoId: string;
   title: string;
   live: boolean;
+  /** Scheduled but not started, read from the thumbnail badge. */
+  upcoming: boolean;
   viewers: number | null;
   age: string | null;
   ageSeconds: number | null;
@@ -359,6 +381,10 @@ function parseLockups(html: string): LockupEntry[] {
       // stream always has viewers and the badge can briefly be absent in the
       // first moments after a stream goes live.
       live: LIVE_BADGE.test(JSON.stringify(overlays ?? "")) || Boolean(viewerLine),
+      // Scheduled, not running. A live badge can sit on a premiere, so this is
+      // tested separately rather than inferred from `live` being false -- an
+      // ordinary finished broadcast also has live=false.
+      upcoming: UPCOMING_BADGE.test(JSON.stringify(overlays ?? "")),
       viewers: viewerLine ? parseViewerCount(viewerLine) : null,
       age,
       ageSeconds: ageToSeconds(age),
@@ -383,11 +409,71 @@ function toItem(entry: LockupEntry, live: boolean): ContentItem {
 }
 
 /** Newest broadcasts, live state included. */
-async function readStreams(): Promise<ContentItem[]> {
-  const html = await fetchText(STREAMS_TAB);
-  if (!html) return [];
+/**
+ * The channel's own scheduled broadcast, if it has one.
+ *
+ * Read off the same /streams response as the finished broadcasts, so it costs
+ * nothing extra.
+ */
+function pickUpcoming(html: string): ContentItem | null {
+  for (const entry of parseLockups(html)) {
+    if (!entry.upcoming) continue;
+    // A scheduled item has no age -- it has not happened yet. If the row carries
+    // one anyway, this badge matched on something other than a schedule, and
+    // guessing at a future from it would be worse than showing nothing.
+    if (entry.age) continue;
+    return { ...toItem(entry, false), upcoming: true };
+  }
+  return null;
+}
 
-  return parseLockups(html).slice(0, STREAM_LIMIT).map((entry) => toItem(entry, entry.live));
+/**
+ * Where a demo stream comes from when the channel has nothing scheduled.
+ *
+ * Set so the card can be seen working; a card that only appears when a creator
+ * schedules something is a card nobody reviews. The card labels it as another
+ * channel's -- see `demoChannel` -- because the whole point of the card is
+ * answering "when is the next stream", and borrowing someone else's schedule
+ * without saying so would answer it wrongly.
+ */
+const DEMO_HANDLE = "@HisetaPhiniaCh";
+const DEMO_NAME = "Hiseta Phinia";
+
+let demoUpcoming: { at: number; item: ContentItem | null } | null = null;
+
+async function readUpcoming(own: ContentItem | null): Promise<ContentItem | null> {
+  if (own) return own;
+
+  if (demoUpcoming && Date.now() - demoUpcoming.at < MEMORY_TTL_QUIET_MS) {
+    return demoUpcoming.item;
+  }
+
+  const tab = `https://www.youtube.com/${DEMO_HANDLE}/streams?view=0&sort=dd&flow=grid&hl=id&gl=ID`;
+  const html = await fetchText(tab);
+  const item = html ? pickUpcoming(html) : null;
+
+  demoUpcoming = { at: Date.now(), item: item ? { ...item, demoChannel: DEMO_NAME } : null };
+  return demoUpcoming.item;
+}
+
+/**
+ * Newest broadcasts, live state included, plus the scheduled one if there is one.
+ *
+ * Both come out of the same /streams response, so asking for the schedule costs
+ * no extra request.
+ */
+async function readStreams(): Promise<{ items: ContentItem[]; upcoming: ContentItem | null }> {
+  const html = await fetchText(STREAMS_TAB);
+  if (!html) return { items: [], upcoming: null };
+
+  const entries = parseLockups(html);
+  return {
+    items: entries
+      .filter((entry) => !entry.upcoming)
+      .slice(0, STREAM_LIMIT)
+      .map((entry) => toItem(entry, entry.live)),
+    upcoming: pickUpcoming(html),
+  };
 }
 
 /**
@@ -601,7 +687,15 @@ export default async function handler(req: UploadsRequest, res: UploadsResponse)
   // are unrelated requests to unrelated pages, so serialising them would triple
   // the latency for no benefit. A partial failure is kept, not thrown away,
   // because two working tabs beat an error page.
-  const [streams, videos, clips] = await Promise.all([readStreams(), readVideos(), readClips()]);
+  const [{ items: streams, upcoming: ownUpcoming }, videos, clips] = await Promise.all([
+    readStreams(),
+    readVideos(),
+    readClips(),
+  ]);
+
+  // Only reached when the channel itself has nothing scheduled, and then only so
+  // the card can be seen at all.
+  const upcoming = await readUpcoming(ownUpcoming);
 
   if (streams.length === 0 && videos.length === 0 && clips.length === 0) {
     // Everything failed. A stale copy is still true data and beats an error
@@ -633,6 +727,9 @@ export default async function handler(req: UploadsRequest, res: UploadsResponse)
     streams,
     videos,
     clips,
+    // Null rather than omitted, so the client can tell "nothing scheduled" from a
+    // payload that predates the field.
+    upcoming,
   };
 
   lastGood = { payload, at: Date.now(), liveCount };

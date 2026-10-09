@@ -1,6 +1,7 @@
 import { Broadcast, Eye, Play } from "@phosphor-icons/react";
 import { useState } from "react";
 
+import { UpcomingCard } from "@/components/Upcoming";
 import { Reveal, StaggerGroup, StaggerItem } from "@/lib/reveal";
 import { ageLabel, useContent } from "@/lib/useContent";
 import type { ContentItem } from "@/lib/useContent";
@@ -30,7 +31,7 @@ const AGE_UNIT_MS: Record<string, number> = {
  * staggered two-column flow where every other card drops down.
  */
 export function Uploads() {
-  const { streams, live, source } = useContent();
+  const { streams, live, source, upcoming } = useContent();
 
   // The endpoint returns the newest broadcasts regardless of age; this section
   // shows the last day of them. A label the grids write is the source of truth
@@ -78,6 +79,13 @@ export function Uploads() {
                 : "Belum ada broadcast dalam 24 jam. Yang paling baru:"}
           </p>
         </Reveal>
+
+        {/*
+          The next stream sits above the finished ones and outside the grid: it
+          is a different kind of claim, and putting it in the same flow as cards
+          labelled with past ages would read as one of them.
+        */}
+        <UpcomingCard item={upcoming} />
 
         {items.length > 0 ? (
           <StaggerGroup

@@ -13,6 +13,10 @@ export type ContentItem = {
   duration: string | null;
   /** Publishing channel, on the clips tab only. */
   channel?: string;
+  /** Scheduled but not started. Separate from live: one is now, one is later. */
+  upcoming?: boolean;
+  /** Set when the stream belongs to another channel, so a card can say so. */
+  demoChannel?: string;
 };
 
 type ApiPayload = {
@@ -22,12 +26,16 @@ type ApiPayload = {
   streams: ContentItem[];
   videos: ContentItem[];
   clips: ContentItem[];
+  /** Scheduled broadcast, or null. */
+  upcoming?: ContentItem | null;
 };
 
 type State = {
   streams: ContentItem[];
   videos: ContentItem[];
   clips: ContentItem[];
+  /** Scheduled but not started, when there is one. */
+  upcoming: ContentItem | null;
   /** True when at least one broadcast is confirmed live. */
   live: boolean;
   /** "api" once a response lands, "snapshot" while on the bundled copy. */
@@ -145,6 +153,10 @@ const INITIAL: State = {
   streams: [],
   videos: [],
   clips: [],
+  // Null until the endpoint answers, and deliberately not a bundled copy. Every
+  // other list falls back to the snapshot because a slightly old upload is still
+  // true; a scheduled stream is a claim about a future that can be cancelled.
+  upcoming: null,
   live: false,
   source: "loading",
   error: null,
@@ -208,6 +220,10 @@ export function useContent(): State {
           streams: payload.streams,
           videos: Array.isArray(payload.videos) ? payload.videos : [],
           clips: Array.isArray(payload.clips) ? payload.clips : [],
+          // The endpoint decides whether anything is scheduled, so its answer
+          // replaces any bundled copy outright: a stale upcoming card is a claim
+          // about the future and must not age in place.
+          upcoming: payload.upcoming ?? null,
           live: payload.streams.some((item) => item.live),
           source: "api",
           error: null,
@@ -219,6 +235,8 @@ export function useContent(): State {
           streams: SNAPSHOT_STREAMS,
           videos: SNAPSHOT_VIDEOS,
           clips: SNAPSHOT_CLIPS,
+          // No snapshot copy on this path -- see the note on INITIAL.
+          upcoming: null,
           live: false,
           source: "snapshot",
           error: error instanceof Error ? error.message : String(error),
