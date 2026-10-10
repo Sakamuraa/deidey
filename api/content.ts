@@ -265,6 +265,15 @@ interface ContentItem {
   live: boolean;
   viewers: number | null;
   age: string | null;
+  /**
+   * Absolute publish instant behind `age`, so the client can advance the label.
+   *
+   * Without this the string is frozen at whatever moment the payload was built,
+   * and a card claims "6 jam lalu" for as long as a cache keeps serving it. Null
+   * when there is no age to pin: a running broadcast carries a viewer count in
+   * that row instead, and anything scheduled has not happened yet.
+   */
+  publishedAt?: string | null;
   /** Runtime length of a finished video, e.g. "2.03.50". Null on a broadcast. */
   duration: string | null;
   /** Channel that published it, on the clips tab only. */
@@ -393,6 +402,24 @@ function parseLockups(html: string): LockupEntry[] {
   return entries;
 }
 
+/**
+ * When this broadcast was published, as an absolute instant.
+ *
+ * The `age` string on its own is a photograph. It says "6 jam lalu" and stays
+ * saying it for as long as whatever cached this payload keeps serving it, which
+ * is how a card ends up claiming six hours when the stream is nine hours old.
+ *
+ * Pinning the number to a wall-clock time makes the label self-correcting: the
+ * client measures from this instant to now and re-derives the wording, so the
+ * text stays honest no matter how long the payload sat in a cache. The two are
+ * sent together -- the string is the channel's own phrasing and the instant is
+ * what makes it advance.
+ */
+function publishedAtOf(entry: { ageSeconds: number | null }): string | null {
+  if (entry.ageSeconds === null) return null;
+  return new Date(Date.now() - entry.ageSeconds * 1000).toISOString();
+}
+
 function toItem(entry: LockupEntry, live: boolean): ContentItem {
   return {
     videoId: entry.videoId,
@@ -402,6 +429,7 @@ function toItem(entry: LockupEntry, live: boolean): ContentItem {
     live,
     viewers: live ? entry.viewers : null,
     age: entry.age,
+    publishedAt: publishedAtOf(entry),
     duration: null,
   };
 }
@@ -607,6 +635,7 @@ async function readClips(): Promise<ContentItem[]> {
       live: false,
       viewers: null,
       age: entry.age,
+      publishedAt: publishedAtOf(entry),
       duration: entry.duration,
       channel: entry.channel,
     }));
@@ -637,6 +666,25 @@ const MEMORY_TTL_QUIET_MS = 30 * 60 * 1000;
  */
 const MEMORY_TTL_UPCOMING_MS = 20 * 1000;
 
+/**
+ * Edge window for a channel with nothing running.
+ *
+ * Fifteen minutes, not the hour this used to carry.
+ *
+ * The edge entry was the binding constraint on how fast a new upload could
+ * appear, not the memory layer above it: the warm copy refreshes after half an
+ * hour, but an hour-long edge entry means the edge never asks until well after
+ * that, so the effective freshness was sixty minutes on a quiet channel rather
+ * than the thirty the memory layer was written for.
+ *
+ * Lowering it costs nothing against YouTube. The memory layer still absorbs the
+ * upstream call; this only means the edge consults that layer twice as often and
+ * gets its answer without leaving Vercel. The age labels no longer depend on this
+ * window either -- those are measured from `publishedAt` on the client -- so this
+ * governs when a new upload appears, not how old the cards claim to be.
+ */
+const QUIET_CACHE = "public, s-maxage=900, stale-while-revalidate=1800";
+
 
 export default async function handler(req: UploadsRequest, res: UploadsResponse) {
   if (req.method && req.method !== "GET") {
@@ -662,7 +710,7 @@ export default async function handler(req: UploadsRequest, res: UploadsResponse)
           ? "public, s-maxage=20, stale-while-revalidate=45"
           : lastGood.liveCount > 0
             ? "public, s-maxage=300, stale-while-revalidate=600"
-            : "public, s-maxage=3600, stale-while-revalidate=86400",
+            : QUIET_CACHE,
       );
       res.setHeader("X-Data-Source", "memory");
       res.status(200).json(lastGood.payload);
@@ -727,7 +775,7 @@ export default async function handler(req: UploadsRequest, res: UploadsResponse)
       ? "public, s-maxage=20, stale-while-revalidate=45"
       : liveCount > 0
         ? "public, s-maxage=300, stale-while-revalidate=600"
-        : "public, s-maxage=3600, stale-while-revalidate=86400",
+        : QUIET_CACHE,
   );
   res.setHeader("X-Data-Source", "live");
   res.status(200).json(payload);

@@ -9,6 +9,16 @@ export type ContentItem = {
   viewers: number | null;
   /** "5 jam lalu", as the channel's own grid writes it. */
   age: string | null;
+  /**
+   * Absolute publish instant behind `age`.
+   *
+   * The API path sends this so the label can be re-derived from it rather than
+   * read verbatim. The string alone is a snapshot of one moment -- an edge cache
+   * happily serves the same payload for an hour, and a card that prints the
+   * cached string keeps claiming "6 jam lalu" long after the stream is nine hours
+   * old. Measuring from an instant cannot go stale that way.
+   */
+  publishedAt?: string | null;
   /** Runtime of a finished video, e.g. "2.03.50". Null on a broadcast. */
   duration: string | null;
   /** Publishing channel, on the clips tab only. */
@@ -137,11 +147,22 @@ export function formatAge(ms: number): string {
 /**
  * The age to render for one item, from whichever source supplied it.
  *
- * The API path needs no work: its label was read moments ago. The snapshot path
- * carries the measured duration, so the label advances on its own instead of
- * ageing in place.
+ * The API path is measured, not quoted. `publishedAt` is a wall-clock instant, so
+ * the label is re-derived from it every render and stays correct however long the
+ * payload sat in a cache. The `age` string is kept only as a fallback for a
+ * response that predates the field.
+ *
+ * The snapshot path carries the measured duration instead, so its label advances
+ * the same way -- a copy that keeps saying "1 jam lalu" a week later would be
+ * lying, and caching is the only part of this page that can go stale with no
+ * server to refresh it.
  */
 export function ageLabel(item: ContentItem): string | null {
+  if (item.publishedAt) {
+    const elapsed = Date.now() - new Date(item.publishedAt).getTime();
+    if (Number.isFinite(elapsed) && elapsed >= 0) return formatAge(elapsed);
+  }
+
   if (item.age) return item.age;
 
   const captured = SNAPSHOT_AGES[item.videoId];
