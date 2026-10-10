@@ -1,10 +1,12 @@
 import { Broadcast, Eye, Play } from "@phosphor-icons/react";
 import { useState } from "react";
 
+import { LiveNumber } from "@/components/LiveNumber";
 import { UpcomingCard } from "@/components/Upcoming";
 import { Reveal, StaggerGroup, StaggerItem } from "@/lib/reveal";
 import { ageLabel, useContent } from "@/lib/useContent";
 import type { ContentItem } from "@/lib/useContent";
+import { useLiveViewers } from "@/lib/useLiveViewers";
 
 const HOUR = 60 * 60 * 1000;
 /** Anything inside this window counts as recent, anything older does not. */
@@ -184,6 +186,14 @@ function BroadcastCard({ item, fallbackIndex }: { item: ContentItem; fallbackInd
   const [fallback, setFallback] = useState(false);
   const label = ageLabel(item);
 
+  /*
+   * Polled only while this card is a running broadcast. A finished stream's count
+   * is frozen by definition, so asking again would be a request per card per page
+   * for a number that can never move.
+   */
+  const polled = useLiveViewers(item.live, item.videoId);
+  const shownViewers = polled ?? item.viewers;
+
   return (
     <a href={item.url} target="_blank" rel="noopener noreferrer" className="group block">
       {/* 16:9 frames keep the card radius. The arch is reserved for the square
@@ -229,16 +239,20 @@ function BroadcastCard({ item, fallbackIndex }: { item: ContentItem; fallbackInd
             {item.title}
           </span>
 
-          {(label || item.viewers !== null) && (
+          {(label || shownViewers !== null) && (
             <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-fg-subtle">
               {/* The channel's own relative age, "5 jam lalu". Not a start time:
                   YouTube counts from when the archive went up, which is hours
                   after the stream began, so the card does not claim otherwise. */}
               {label && <span>{label}</span>}
-              {item.viewers !== null && (
-                <span className="inline-flex items-center gap-1">
+              {shownViewers !== null && (
+                <span className="inline-flex items-center gap-1" data-live-viewers>
                   <Eye size={14} aria-hidden="true" />
-                  {item.viewers.toLocaleString("id-ID")}
+                  {/* Falls back to the value the card was built with, so the row
+                      never disappears between polls -- only the number stops
+                      moving. */}
+                  <LiveNumber value={shownViewers} />
+                  <span className="sr-only">menonton</span>
                 </span>
               )}
             </span>
