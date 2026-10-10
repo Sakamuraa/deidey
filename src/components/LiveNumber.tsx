@@ -70,18 +70,28 @@ export function LiveNumber({
         aria-hidden="true"
         className="relative inline-flex overflow-hidden align-baseline"
       >
-        <AnimatePresence initial={false} mode="popLayout">
+<AnimatePresence initial={false} mode="popLayout">
           <motion.span
             key={shown}
-            initial={willAnimate ? { y: delta > 0 ? "55%" : "-55%", opacity: 0 } : false}
+            /*
+             * 1.6em, and the units are the point.
+             *
+             * A percentage translate in y is measured against the element's own
+             * height, and this element is one line tall -- so the original "55%"
+             * came out at roughly eight pixels. Traced in a browser at that value it
+             * moved about one pixel of eased travel and read as nothing at all.
+             * Measured in em it moves a line and a half, which is what makes the
+             * direction legible without looking like the page is jumping.
+             */
+            initial={willAnimate ? { y: delta > 0 ? "1.6em" : "-1.6em", opacity: 0 } : false}
             animate={{ y: 0, opacity: 1 }}
             // An empty exit rather than undefined: this project sets
             // exactOptionalPropertyTypes, which will not accept an explicit
             // undefined. Below the threshold the old value just goes.
-            exit={willAnimate ? { y: delta > 0 ? "-55%" : "55%", opacity: 0 } : {}}
+            exit={willAnimate ? { y: delta > 0 ? "-1.6em" : "1.6em", opacity: 0 } : {}}
             transition={{ duration: 0.44, ease: EASE_OUT_EXPO }}
-            // tabular figures so a three-digit count and a four-digit one do not
-            // change the width of everything to their right as they roll.
+            // tabular figures so a three-digit and a four-digit count do not change
+            // the width of everything to their right as they roll.
             className="inline-block [font-variant-numeric:tabular-nums]"
           >
             {format(shown)}
