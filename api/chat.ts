@@ -535,7 +535,8 @@ function extractJson(source: string, marker: string): Record<string, unknown> | 
 }
 
 /**
- * Whether the broadcast is still running, read from the player response.
+ * Whether the broadcast is still running, read from an already-parsed player
+ * response.
  *
  * Matching the text of the whole page does not work, because a watch page embeds
  * the player responses of every recommended and related video too. One of those
@@ -547,9 +548,13 @@ function extractJson(source: string, marker: string): Record<string, unknown> | 
  * When that response is missing the answer is false rather than a guess. Guessing
  * true sends every archived broadcast to the live endpoint, which is the same
  * empty result reached by a much longer route.
+ *
+ * Takes the parsed response rather than the HTML. This used to re-extract the
+ * 1.4 MB blob from the page on every call, which meant parsing the same document
+ * twice for one answer — and on a cold instance that is the difference between a
+ * request that fits the budget and one that does not.
  */
-function readIsLive(html: string): boolean {
-  const player = extractJson(html, "var ytInitialPlayerResponse =");
+function readIsLive(player: Record<string, unknown> | null): boolean {
   if (!player) return false;
 
   const videoDetails = pick<Record<string, unknown>>(player, "videoDetails");
@@ -584,8 +589,33 @@ interface WatchFacts {
  * `isLive` is the reason there are two chat modes rather than one. A finished
  * broadcast has no live chat to read, but it does have a full replay, and the
  * two are served by different endpoints with different cursors.
+ *
+ * Warm copy, because this is the slowest thing the route does and it was running
+ * on every poll. The page is 1.4 MB; re-fetching and re-parsing it every fifteen
+ * seconds to learn a fact that changes at most twice an hour is what made chat
+ * feel slow to open, and it is the same per-request upstream call the memory cache
+ * exists to absorb elsewhere in this codebase.
+ *
+ * The window is short for a live stream and long for a finished one, and that
+ * asymmetry is deliberate rather than a compromise. A running broadcast can start
+ * and stop at any moment, so its answer goes stale in the direction that matters
+ * — a finished broadcast reported live means chat that silently stops arriving,
+ * which is the exact failure this whole fix is about. A recording cannot change,
+ * so its facts are held far longer. Everything read out of the response is
+ * immutable for a given video anyway: id, title and duration never change, and
+ * only `isLive` flips, once, when the stream ends.
  */
+let watchCache: { videoId: string; facts: WatchFacts; at: number } | null = null;
+
 async function readWatch(videoId: string, signal: AbortSignal): Promise<WatchFacts | null> {
+  // A live stream's window has to be short enough that the transition to finished
+  // is noticed; a recording's can be long because nothing about it will change.
+  const cached = watchCache?.videoId === videoId ? watchCache : null;
+  if (cached) {
+    const ttl = cached.facts.isLive ? 20_000 : 5 * 60_000;
+    if (Date.now() - cached.at < ttl) return cached.facts;
+  }
+
   // bpctr=9999999999 with has_verified=1 skips the interstitial that otherwise
   // replaces the payload with playabilityStatus LOGIN_REQUIRED.
   const res = await fetch(`${WATCH}?v=${videoId}&bpctr=9999999999&has_verified=1`, {
@@ -598,7 +628,9 @@ async function readWatch(videoId: string, signal: AbortSignal): Promise<WatchFac
 
   // One parse, reused. Everything below is read out of this player response
   // rather than the page text, because a watch page also carries the responses
-  // of every related video and a bare regex cannot tell them apart.
+  // of every related video and a bare regex cannot tell them apart. readIsLive
+  // takes this same object rather than re-extracting it -- it used to parse the
+  // 1.4 MB document a second time for the same answer.
   const player = extractJson(html, "var ytInitialPlayerResponse =");
   const videoDetails = player ? pick<Record<string, unknown>>(player, "videoDetails") : null;
 
@@ -607,17 +639,25 @@ async function readWatch(videoId: string, signal: AbortSignal): Promise<WatchFac
   if (!channelId) return null;
 
   // og:title is the video name; the <title> element appends " - YouTube".
-  const raw = html.match(/<meta property="og:title" content="(.*?)"/)?.[1];
+  // Read from the player response first and only then the meta tag, because the
+  // response is the one already parsed and the meta tag is a second pass over a
+  // megabyte of HTML for a string the response already carries.
+  const raw =
+    pick<string>(pick<Record<string, unknown>>(player, "videoDetails"), "title") ??
+    html.match(/<meta property="og:title" content="(.*?)"/)?.[1];
   const title = raw
     ? decodeEntities(raw.replace(/&#(\d+);/g, (_, d) => String.fromCharCode(Number(d))))
     : null;
 
-  return {
+  const facts: WatchFacts = {
     channelId,
     title: title?.trim() || null,
-    isLive: readIsLive(html),
+    isLive: readIsLive(player),
     durationSeconds: numberOrNull(pick<string>(videoDetails, "lengthSeconds")),
   };
+
+  watchCache = { videoId, facts, at: Date.now() };
+  return facts;
 }
 
 /** Parse a numeric string, or null when it is absent or not a number. */

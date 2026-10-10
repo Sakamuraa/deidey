@@ -65,7 +65,7 @@ export function StreamPage() {
   const heading = item?.title ?? chat.title;
 
   useEffect(() => {
-    if (heading) document.title = `${heading} - Deidey`;
+    if (heading) document.title = `${heading} - Pingu Stardine`;
   }, [heading]);
 
   if (!id) return <Missing />;
@@ -164,11 +164,11 @@ function Player({
   }, [started, currentTime, onPlayback]);
 
   return (
-    <div className="aspect-video w-full overflow-hidden rounded-card border border-line bg-obsidian">
+    <div className="aspect-video w-full overflow-hidden rounded-card border border-line bg-cocoa">
       <div
         ref={mountRef}
         className="size-full [&>iframe]:size-full [&>iframe]:border-0"
-        title="Pemutar broadcast Deidey"
+        title="Pemutar broadcast Pingu Stardine"
       />
     </div>
   );
@@ -182,7 +182,7 @@ function MetaRow({ item }: { item: ContentItem | null }) {
   return (
     <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-fg-subtle">
       {item.live && (
-        <span className="inline-flex items-center gap-1.5 rounded-pill bg-obsidian px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-bg">
+        <span className="inline-flex items-center gap-1.5 rounded-pill bg-cocoa px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-bg">
           <span className="relative flex size-1.5">
             <span className="absolute inline-flex size-full animate-ping rounded-full bg-bg opacity-75" />
             <span className="relative inline-flex size-1.5 rounded-full bg-bg" />
@@ -306,6 +306,13 @@ function ChatPanel({
    * Each row carries its position in the recording, so the target is found by
    * looking at the DOM rather than by arithmetic on an index that shifts as more
    * arrive. A live stream has no fixed positions and is left alone.
+   *
+   * The scroll is applied to the log's own scrollTop, not with scrollIntoView.
+   * scrollIntoView walks up to every scrollable ancestor and scrolls each one, so
+   * on a page where the player and the log sit side by side it moved the document
+   * too — the reader was yanked away from the video by chat arriving, which is the
+   * opposite of following the playhead. offsetTop is already relative to the log,
+   * so the arithmetic is the same and the page stays put.
    */
   useEffect(() => {
     if (!started || mode !== "replay") return;
@@ -327,7 +334,17 @@ function ChatPanel({
       }
     }
 
-    if (nearest) nearest.scrollIntoView({ block: "center", behavior: "smooth" });
+    if (!nearest) return;
+
+    // Centre the row inside the box by hand: half the box's height, minus half the
+    // row's, plus whatever the row sits at within the log.
+    const target =
+      nearest.offsetTop - log.clientHeight / 2 + nearest.offsetHeight / 2;
+
+    // Clamped, because a transcript can be shorter than the box and scrollTop
+    // would otherwise be set to a negative number, which the browser ignores and
+    // leaves the log pinned to the top for no reason.
+    log.scrollTop = Math.max(0, Math.min(target, log.scrollHeight - log.clientHeight));
   }, [currentTime, mode, started, visible.length]);
 
   return (
@@ -394,19 +411,19 @@ function ChatPanel({
                     className="mt-0.5 h-7 w-7 shrink-0 rounded-full"
                   />
                 ) : (
-                  <span className="mt-0.5 h-7 w-7 shrink-0 rounded-full bg-accent-soft" />
+                  <span className="mt-0.5 h-7 w-7 shrink-0 rounded-full bg-peach-soft" />
                 )}
 
                 <div className="min-w-0 flex-1">
                   <p className="flex flex-wrap items-baseline gap-x-2 text-xs">
                     <span className="font-semibold text-fg">{m.author || "Tanpa nama"}</span>
                     {m.badge === "member" && (
-                      <span className="rounded-full bg-accent-soft px-1.5 py-px text-[0.625rem] font-medium text-fg">
+                      <span className="rounded-full bg-peach-soft px-1.5 py-px text-[0.625rem] font-medium text-shadow">
                         Member
                       </span>
                     )}
                     {m.badge === "paid" && (
-                      <span className="rounded-full bg-amethyst px-1.5 py-px text-[0.625rem] font-medium text-glow">
+                      <span className="rounded-full bg-peach px-1.5 py-px text-[0.625rem] font-medium text-white">
                         Disokong
                       </span>
                     )}
