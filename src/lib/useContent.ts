@@ -126,14 +126,28 @@ const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 const WEEK = 7 * DAY;
 const MONTH = 30 * DAY;
+/**
+ * A year, at 365 days rather than 365.25.
+ *
+ * The same figure api/content.ts uses for `tahun`, so a label the API is able to
+ * produce is one this can render. The labels are coarse either way -- "1 tahun
+ * lalu" on YouTube covers anything from 12 to 24 months -- so the extra precision
+ * would be precision the source does not have.
+ */
+const YEAR = 365 * DAY;
 
 /**
  * Re-render a duration as the age label the card shows.
  *
  * Boundaries match YouTube's own grids closely enough to read the same: they drop
- * to days around a day, to weeks around a week, to months around a month. A value
- * under a minute reads as "beberapa detik", which is what YouTube says for that
- * window rather than the number zero.
+ * to days around a day, to weeks around a week, to months around a month, and to
+ * years around a year. A value under a minute reads as "beberapa detik", which is
+ * what YouTube says for that window rather than the number zero.
+ *
+ * The year tier exists because two of the endpoints can return "tahun" and this
+ * could not say it: an eleven-year-old clip came out as "133 bulan lalu", which is
+ * a true number and a meaningless one. Every bundled snapshot also holds entries
+ * older than a year, so the same label appeared on those without any API involved.
  */
 export function formatAge(ms: number): string {
   if (ms < MINUTE) return "beberapa detik lalu";
@@ -141,7 +155,8 @@ export function formatAge(ms: number): string {
   if (ms < DAY) return `${Math.floor(ms / HOUR)} jam lalu`;
   if (ms < WEEK) return `${Math.floor(ms / DAY)} hari lalu`;
   if (ms < MONTH) return `${Math.floor(ms / WEEK)} minggu lalu`;
-  return `${Math.floor(ms / MONTH)} bulan lalu`;
+  if (ms < YEAR) return `${Math.floor(ms / MONTH)} bulan lalu`;
+  return `${Math.floor(ms / YEAR)} tahun lalu`;
 }
 
 /**
