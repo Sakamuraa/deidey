@@ -48,6 +48,23 @@ export function Uploads() {
   });
 
   /*
+   * A running broadcast does not pass through the window, it goes around it.
+   *
+   * The window is read off the age label, and a live stream does not have one:
+   * YouTube puts a viewer count in that row instead, so `ageLabel` returns null
+   * and the filter above drops it. That is exactly how /konten can show a Live
+   * badge off the same `streams` array while this section — which also knows
+   * `live` is true and says so in its own heading — showed nothing but the last
+   * finished broadcast.
+   *
+   * So live entries are pulled out ahead of the filter and placed first, and the
+   * window keeps only what is not already there. Deduped by the live flag itself,
+   * so a broadcast that is both live and recent is listed once.
+   */
+  const liveItems = streams.filter((item) => item.live);
+  const withinWindow = [...liveItems, ...recent.filter((item) => !item.live)];
+
+  /*
    * Never an empty shelf.
    *
    * The window is a day, and Deidey does not stream every day, so most days this
@@ -59,7 +76,7 @@ export function Uploads() {
    * The fallback is the newest entry, so when she goes live it *is* the live one:
    * it passes the window on its own and this branch stops being taken.
    */
-  const items = recent.length > 0 ? recent : streams.slice(0, 1);
+  const items = withinWindow.length > 0 ? withinWindow : streams.slice(0, 1);
 
   return (
     <section id="klip" aria-labelledby="uploads-heading" className="py-24 md:py-32">
