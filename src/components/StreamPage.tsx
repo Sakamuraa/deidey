@@ -284,15 +284,112 @@ function ChatPanel({
   // A replay does not use this: its log is anchored to the playhead instead, and
   // scrolling to the bottom while the video sits an hour in would tear the reader
   // away from the moment they are watching.
+  /*
+   * Following the tail of a live chat, without ever taking the page away from
+   * someone reading it.
+   *
+   * Three states, and the distinction matters more than the scrolling does:
+   *
+   *   following  the reader is parked at the bottom, so new lines scroll in
+   *   reading    they have scrolled up to look at something, and stay put
+   *   returning  they were reading, new lines arrived, and they have not moved
+   *
+   * The old version inferred all of that from one comparison each time messages
+   * arrived -- within eighty pixels of the bottom meant "follow". That is not the
+   * same question. Eighty pixels is a line or two of chat, so a reader who had
+   * scrolled up a little to re-read something was still inside the threshold and
+   * got dragged back to the bottom by the next message, repeatedly, while they
+   * were trying to read. It also read the *previous* scroll position at the moment
+   * new content landed, by which point the browser had already grown the box, so
+   * the measurement was of a box that had just changed underneath it.
+   *
+   * So the position is sampled from a scroll event rather than from the height at
+   * render time, and following is a real boolean that only a deliberate scroll to
+   * the bottom turns back on. A small tolerance is kept -- exactly at the bottom
+   * is fragile, since sub-pixel rounding puts it just outside -- but it is tight
+   * enough that scrolling up by a line is enough to stop following.
+   */
+  const [following, setFollowing] = useState(true);
+  /** Lines that arrived while the reader was looking elsewhere. */
+  const [unread, setUnread] = useState(0);
+
+  // Refs, because the scroll handler runs on every frame of a wheel or drag and
+  // must not re-render the log to record where the reader is.
+  const followingRef = useRef(true);
+  const lastCountRef = useRef(0);
+  const lastModeRef = useRef<string | null>(null);
+
+  const markFollowing = useCallback((value: boolean) => {
+    followingRef.current = value;
+    setFollowing(value);
+    if (value) setUnread(0);
+  }, []);
+
   useEffect(() => {
-    if (mode !== "live") return;
+    const node = logRef.current;
+    if (!node) return;
+
+    const onScroll = () => {
+      const slack = node.scrollHeight - node.scrollTop - node.clientHeight;
+      // Six pixels: enough to survive sub-pixel rounding at the bottom, tight
+      // enough that a deliberate scroll upward stops the following straight away.
+      markFollowing(slack <= 6);
+    };
+
+    node.addEventListener("scroll", onScroll, { passive: true });
+    return () => node.removeEventListener("scroll", onScroll);
+  }, [markFollowing]);
+
+  /*
+   * New lines arriving.
+   *
+   * Following: scroll down to them, smoothly, so the eye can track it rather than
+   * being teleported.
+   *
+   * Reading: count them instead of moving. The count is what lets the reader come
+   * back on their own terms -- either by scrolling to the bottom, which turns
+   * following back on and clears it, or by pressing the button.
+   *
+   * The first load is a scroll to the bottom without animation. The log is empty
+   * at that point and there is nothing to follow from, so animating would only
+   * show the box flying up from nothing.
+   */
+  useEffect(() => {
+    if (mode !== "live") {
+      lastModeRef.current = mode;
+      return;
+    }
 
     const node = logRef.current;
     if (!node) return;
 
-    const atBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 80;
-    if (atBottom) node.scrollTop = node.scrollHeight;
-  }, [visible.length, mode]);
+    const grew = visible.length - lastCountRef.current;
+    const firstLoad = lastModeRef.current !== "live";
+    lastCountRef.current = visible.length;
+    lastModeRef.current = mode;
+
+    if (firstLoad) {
+      node.scrollTop = node.scrollHeight;
+      markFollowing(true);
+      return;
+    }
+
+    if (grew <= 0) return;
+
+    if (followingRef.current) {
+      node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
+    } else {
+      setUnread((n) => n + grew);
+    }
+  }, [visible.length, mode, markFollowing]);
+
+  /* Jump back to the tail, by button or by reaching the bottom yourself. */
+  const jumpToLatest = useCallback(() => {
+    const node = logRef.current;
+    if (!node) return;
+    node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
+    markFollowing(true);
+  }, [markFollowing]);
 
   /*
    * Follow the playhead through the log.
@@ -392,13 +489,34 @@ function ChatPanel({
           )}
         </div>
       ) : visible.length > 0 ? (
-        <div
-          id="konten-chat-log"
-          ref={logRef}
-          className="min-h-0 flex-1 overflow-y-auto px-5 py-4"
-          aria-live="polite"
-        >
-          <ul className="flex flex-col gap-3">
+        /*
+         * Wrapped rather than the log standing alone, so the jump button can sit
+         * over the bottom of the box. It is absolutely positioned inside a relative
+         * parent, which means it adds no height and does not become part of the
+         * scrolling content -- a button in the flow would be pushed out of view by
+         * the very messages it exists to follow.
+         */
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <div
+            id="konten-chat-log"
+            ref={logRef}
+            className="min-h-0 flex-1 overflow-y-auto px-5 py-4"
+            /*
+             * Announcements follow the scroll state, not the message count.
+             *
+             * `polite` while the log is keeping itself current is right: the reader
+             * is watching it fill, and a new line is the thing they are here for.
+             *
+             * `off` while they have scrolled up is the point of the whole three
+             * state arrangement. A live region announces on content change whether
+             * or not the reader can see the change -- so someone reading back through
+             * chat would have every new line announced at them while the line itself
+             * had deliberately not been moved into view. The button carries the count
+             * instead, so nothing arrives unasked and nothing is lost.
+             */
+            aria-live={following && mode === "live" ? "polite" : "off"}
+          >
+            <ul className="flex flex-col gap-3">
             {visible.map((m) => (
               <li key={m.id} data-offset={m.offsetSeconds ?? undefined} className="flex gap-2.5">
                 {m.avatar ? (
@@ -462,7 +580,25 @@ function ChatPanel({
                 </div>
               </li>
             ))}
-          </ul>
+            </ul>
+          </div>
+
+          {/*
+            The jump button. Only while a live chat has new lines the reader has
+            not scrolled down to, and only then -- its absence is what says the log
+            is keeping itself up to date. Scrolling to the bottom by hand clears it
+            just as pressing it does, so the two are not different affordances.
+          */}
+          {unread > 0 && (
+            <button
+              type="button"
+              onClick={jumpToLatest}
+              className="absolute inset-x-0 bottom-3 mx-auto w-fit rounded-full border border-line-strong bg-surface px-3.5 py-1.5 text-xs font-medium text-fg shadow-sm transition-colors hover:bg-surface-raised focus-visible:outline-2 focus-visible:outline-offset-2"
+            >
+              ↓ {unread} baru
+              <span className="sr-only"> — ke pesan terbaru</span>
+            </button>
+          )}
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col justify-center px-5 py-8 text-center">

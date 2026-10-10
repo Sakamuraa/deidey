@@ -39,6 +39,14 @@ type Payload = {
   more?: boolean;
   offsetSeconds?: number | null;
   durationSeconds?: number | null;
+  /**
+   * How long YouTube says to wait before asking again, in milliseconds.
+   *
+   * Sent only for a live stream, and it is the endpoint's own knowledge of when the
+   * next message can arrive -- the continuation carries an invalidation deadline set
+   * by the server, not a guess made here.
+   */
+  timeoutMs?: number | null;
 };
 
 type Mode = "live" | "replay";
@@ -63,8 +71,41 @@ type State = {
   status: "loading" | Mode | "quiet" | "unavailable";
 };
 
-/** How often to re-ask during a live stream. The endpoint advertises its own. */
-const POLL_MS = 15_000;
+/*
+ * How long to wait between live polls.
+ *
+ * This used to be a flat fifteen seconds while the comment claimed the endpoint
+ * advertised its own. It did send the figure -- `timeoutMs`, the deadline YouTube
+ * puts on the continuation, which is its own knowledge of when the next message can
+ * exist -- and the client threw it away. Fifteen seconds against a stream where
+ * messages arrive every few is why chat looked stuck.
+ *
+ * The endpoint's number is used instead, bounded on both sides. The floor stops a
+ * broadcast that keeps saying "come back in one second" from becoming a request
+ * per second, which is a billed serverless call each time and is also not how
+ * often chat actually moves. The ceiling covers an endpoint that reports no
+ * deadline at all, which is the case for a quiet stream. Without the ceiling a
+ * missing value would mean never asking again.
+ */
+const POLL_FLOOR_MS = 3_000;
+const POLL_CEIL_MS = 12_000;
+
+/** Used when the endpoint gives no deadline, or one outside the bounds. */
+const POLL_DEFAULT_MS = 6_000;
+
+/**
+ * The wait before the next poll, from the deadline the last response carried.
+ *
+ * A value that is not a positive number, or one that lands outside the bounds, is
+ * replaced rather than clamped. Clamping a three hour deadline to twelve seconds
+ * would turn a stream that is genuinely quiet into a poll a second forever, which
+ * is the failure the ceiling exists to prevent.
+ */
+function nextPollDelay(timeoutMs: number | null | undefined): number {
+  if (typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs)) return POLL_DEFAULT_MS;
+  if (timeoutMs < POLL_FLOOR_MS || timeoutMs > POLL_CEIL_MS) return POLL_DEFAULT_MS;
+  return timeoutMs;
+}
 
 /** Stop after this many consecutive failures rather than hammering a dead stream. */
 const MAX_FAILURES = 4;
@@ -232,7 +273,12 @@ export function useLiveChat(videoId: string, currentTime: number): State {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
 
-    async function tick() {
+async function tick() {
+      // The wait this tick will schedule after itself. Set from the response that
+      // is about to be read, so the next interval reflects what the endpoint last
+      // said rather than a constant chosen when the effect was built.
+      let delay = POLL_DEFAULT_MS;
+
       try {
         const res = await fetch(`/api/chat?id=${videoId}`, { signal: controller.signal });
         if (!res.ok) throw new Error(`api returned ${res.status}`);
@@ -248,12 +294,15 @@ export function useLiveChat(videoId: string, currentTime: number): State {
           );
         }
 
-        modeRef.current = "live";
+modeRef.current = "live";
         setMode("live");
         setTitle((prev) => payload.title ?? prev);
         setStatus(seen.current.size > 0 ? "live" : "quiet");
 
         failures.current = 0;
+        // Read the endpoint's own deadline before the try/catch resets anything, so
+        // the wait for the next poll is the one that response asked for.
+        delay = nextPollDelay(payload.timeoutMs);
       } catch {
         if (controller.signal.aborted) return;
 
@@ -262,9 +311,13 @@ export function useLiveChat(videoId: string, currentTime: number): State {
           setStatus("unavailable");
           return;
         }
+        // A failed poll retries on the default rather than on the last good
+        // deadline: that deadline described a response that never arrived, and
+        // re-reading it would mean waiting on information that is now stale.
+        delay = POLL_DEFAULT_MS;
       }
 
-      if (!controller.signal.aborted) timer = setTimeout(tick, POLL_MS);
+      if (!controller.signal.aborted) timer = setTimeout(tick, delay);
     }
 
     void tick();
