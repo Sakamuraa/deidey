@@ -511,12 +511,39 @@ interface VideoRenderer {
   title?: unknown;
   ownerText?: unknown;
   navigationEndpoint?: unknown;
+  /**
+   * Legacy blurb field. Kept because it is occasionally present, but it is a
+   * wrapper rather than the run list itself -- see `readDescription`.
+   */
   descriptionSnippet?: unknown;
+  /**
+   * Where the blurb actually lives on a current search result.
+   *
+   * An array of one entry, holding `{ snippetText: { runs: [...] } }`.
+   * `detailedMetadataSnippets` appears once per videoRenderer; the old
+   * `descriptionSnippet` appears about once in the entire page, so reading only
+   * that one left every description empty and silently disabled the description
+   * half of the clip keyword test.
+   */
+  detailedMetadataSnippets?: Array<{ snippetText?: unknown }>;
   lengthText?: unknown;
   publishedTimeText?: unknown;
   thumbnail?: {
     thumbnails?: Array<{ url?: string }>;
   };
+}
+
+/**
+ * The blurb under a search result, whichever field it arrived in.
+ *
+ * Prefers the modern path because that is the one the page populates. The legacy
+ * field is tried second and its result joined in as well, since a result
+ * carrying only one of the two should still contribute whatever text it has.
+ */
+function readDescription(renderer: VideoRenderer): string {
+  const detailed = text(renderer.detailedMetadataSnippets?.[0]?.snippetText);
+  const legacy = text(renderer.descriptionSnippet);
+  return [detailed, legacy].filter(Boolean).join(" ");
 }
 
 function collectSearchResults(html: string): VideoRenderer[] {
@@ -556,7 +583,7 @@ function parseSearchResults(html: string): SearchEntry[] {
     if (!title || typeof renderer.videoId !== "string") continue;
 
     const channel = text(renderer.ownerText);
-    const description = text(renderer.descriptionSnippet);
+    const description = readDescription(renderer);
     const published = text(renderer.publishedTimeText);
     const age = parseAge(published);
     const thumbnails = renderer.thumbnail?.thumbnails ?? [];
