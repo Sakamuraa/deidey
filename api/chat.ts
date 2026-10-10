@@ -774,12 +774,29 @@ async function fetchChat(
     durationSeconds: watch.durationSeconds,
   };
 
-  // auto follows the broadcast: a running one has live chat, a finished one has
-  // a replay. An explicit mode wins, so a page can ask for the replay of a
-  // stream that is still running.
-  const useLive = mode === "live" || (mode === "auto" && watch.isLive);
-
-  if (useLive) {
+  /*
+   * How to choose between the two endpoints.
+   *
+   * `auto` used to trust `watch.isLive` outright and pick replay when it was
+   * false. That flag is read from the watch page, and a watch page served to a
+   * datacenter IP is not always the same one a browser gets: measured on Vercel,
+   * `videoDetails.isLive` and `liveBroadcastDetails.isLiveNow` were both absent
+   * for a stream that was demonstrably running, so every `auto` request went to
+   * the replay endpoint -- which is empty for a broadcast that has not ended.
+   * The result was live chat that never appeared, while the very same request
+   * with `mode=live` returned sixty messages from the same host.
+   *
+   * So auto does not decide from the flag at all. It asks the live endpoint
+   * first, because that endpoint is the authority: it returns messages while a
+   * broadcast is running and nothing once it has ended. A running stream that
+   * the flag misreports therefore still gets its chat, and a finished one falls
+   * through to the replay on its own. `watch.isLive` is still reported to the
+   * client, but it no longer decides anything on its own.
+   *
+   * An explicit mode still wins, so a page can ask a finished broadcast's replay
+   * or a running broadcast's live window without this probing.
+   */
+  if (mode === "live") {
     const live = await fetchLive(videoId, watch.channelId, signal);
     if (!live) return null;
 
@@ -792,6 +809,26 @@ async function fetchChat(
       offsetSeconds: null,
       more: false,
     };
+  }
+
+  if (mode === "auto") {
+    // The live endpoint knows better than the page does. Only treat it as not-live
+    // when it comes back with nothing, which is what a finished broadcast does.
+    const live = await fetchLive(videoId, watch.channelId, signal);
+    if (live && live.messages.length > 0) {
+      return {
+        ...base,
+        // The endpoint answered, so the broadcast is running even where the watch
+        // page failed to say so.
+        isLive: true,
+        mode: "live",
+        messages: live.messages.slice(-MESSAGE_LIMIT),
+        cursor: live.next,
+        timeoutMs: live.timeoutMs,
+        offsetSeconds: null,
+        more: false,
+      };
+    }
   }
 
   const replay = await fetchReplay(videoId, watch.channelId, seekSeconds, cursor, signal);
