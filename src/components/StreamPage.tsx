@@ -252,7 +252,28 @@ function ChatPanel({
   // stream list guesses: the list only carries the newest broadcasts.
   const isLive = mode === "live";
 
-  const logRef = useRef<HTMLDivElement>(null);
+  /*
+ * The scrolling chat log, held as state rather than a ref.
+ *
+ * It used to be `useRef`, which is the right shape for "reach the element later"
+ * and the wrong shape for "act when the element arrives". The log only mounts
+ * once playback has started and there are messages to show, so every effect that
+ * needed it ran against a null `current`, returned early, and -- because their
+ * dependency lists did not mention the log -- never ran again.
+ *
+ * The one that mattered was the scroll listener. It was never attached at all, so
+ * `following` stayed true for the whole session, and the playhead effect went on
+ * moving the log every tick. That is the auto-lock: the reader dragged back twenty
+ * lines and the box put them beside the playhead again a second later, with
+ * nothing able to stop it, and no button to appear because `following` was never
+ * false.
+ *
+ * A callback ref both stores the node and puts it in state, so every effect
+ * re-runs when it appears and again when it goes. The cost is a render on mount
+ * and unmount, twice, at the start of a broadcast.
+ */
+const [logEl, setLogEl] = useState<HTMLDivElement | null>(null);
+const logRef = useCallback((node: HTMLDivElement | null) => setLogEl(node), []);
 
   /**
    * The stretch of the transcript that belongs on screen right now.
@@ -341,8 +362,7 @@ function ChatPanel({
   const presentRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const node = logRef.current;
-    if (!node) return;
+    if (!logEl) return;
 
     const onScroll = () => {
       if (mode === "replay" && presentRef.current !== null) {
@@ -354,20 +374,20 @@ function ChatPanel({
          * and six pixels is a rounding error's worth of slack, which would make the
          * log jump under them while they were only nudging it.
          */
-        const distance = Math.abs(node.scrollTop - presentRef.current);
+        const distance = Math.abs(logEl.scrollTop - presentRef.current);
         markFollowing(distance <= 48);
         return;
       }
 
-      const slack = node.scrollHeight - node.scrollTop - node.clientHeight;
+      const slack = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight;
       // Six pixels: enough to survive sub-pixel rounding at the bottom, tight
       // enough that a deliberate scroll upward stops the following straight away.
       markFollowing(slack <= 6);
     };
 
-    node.addEventListener("scroll", onScroll, { passive: true });
-    return () => node.removeEventListener("scroll", onScroll);
-  }, [markFollowing, mode]);
+    logEl.addEventListener("scroll", onScroll, { passive: true });
+    return () => logEl.removeEventListener("scroll", onScroll);
+  }, [markFollowing, mode, logEl]);
 
   /*
    * New lines arriving.
@@ -384,13 +404,11 @@ function ChatPanel({
    * show the box flying up from nothing.
    */
   useEffect(() => {
+    if (!logEl) return;
     if (mode !== "live") {
       lastModeRef.current = mode;
       return;
     }
-
-    const node = logRef.current;
-    if (!node) return;
 
     const grew = visible.length - lastCountRef.current;
     const firstLoad = lastModeRef.current !== "live";
@@ -398,7 +416,7 @@ function ChatPanel({
     lastModeRef.current = mode;
 
     if (firstLoad) {
-      node.scrollTop = node.scrollHeight;
+      logEl.scrollTop = logEl.scrollHeight;
       markFollowing(true);
       return;
     }
@@ -406,19 +424,18 @@ function ChatPanel({
     if (grew <= 0) return;
 
     if (followingRef.current) {
-      node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
+      logEl.scrollTo({ top: logEl.scrollHeight, behavior: "smooth" });
     } else {
       setUnread((n) => n + grew);
     }
-  }, [visible.length, mode, markFollowing]);
+  }, [visible.length, mode, markFollowing, logEl]);
 
   /* Jump back to the tail, by button or by reaching the bottom yourself. */
   const jumpToLatest = useCallback(() => {
-    const node = logRef.current;
-    if (!node) return;
-    node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
+    if (!logEl) return;
+    logEl.scrollTo({ top: logEl.scrollHeight, behavior: "smooth" });
     markFollowing(true);
-  }, [markFollowing]);
+  }, [markFollowing, logEl]);
 
   /*
    * Follow the playhead through the log.
@@ -442,9 +459,9 @@ function ChatPanel({
    */
   useEffect(() => {
     if (!started || mode !== "replay") return;
+    if (!logEl) return;
 
-    const log = logRef.current;
-    if (!log) return;
+    const log = logEl;
 
     let nearest: HTMLElement | null = null;
     let nearestGap = Infinity;
@@ -495,7 +512,7 @@ function ChatPanel({
     if (!followingRef.current) return;
 
     log.scrollTop = clamped;
-  }, [currentTime, mode, started, visible.length]);
+  }, [currentTime, mode, started, visible.length, logEl]);
 
   /*
    * Back to the playhead, for a replay. The counterpart to jumpToLatest, which
@@ -503,11 +520,11 @@ function ChatPanel({
    * in both modes, which is why there are two functions rather than one.
    */
   const jumpToPresent = useCallback(() => {
-    if (presentRef.current !== null) {
-      logRef.current?.scrollTo({ top: presentRef.current, behavior: "smooth" });
+    if (presentRef.current !== null && logEl) {
+      logEl.scrollTo({ top: presentRef.current, behavior: "smooth" });
       markFollowing(true);
     }
-  }, [markFollowing]);
+  }, [markFollowing, logEl]);
 
   return (
     /*
