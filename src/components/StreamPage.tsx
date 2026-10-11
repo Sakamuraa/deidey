@@ -65,7 +65,7 @@ export function StreamPage() {
   const heading = item?.title ?? chat.title;
 
   useEffect(() => {
-    if (heading) document.title = `${heading} - Pingu Stardine`;
+    if (heading) document.title = `${heading} - Deidey`;
   }, [heading]);
 
   if (!id) return <Missing />;
@@ -168,7 +168,7 @@ function Player({
       <div
         ref={mountRef}
         className="size-full [&>iframe]:size-full [&>iframe]:border-0"
-        title="Pemutar broadcast Pingu Stardine"
+        title="Pemutar broadcast Deidey"
       />
     </div>
   );
@@ -549,16 +549,19 @@ const logRef = useCallback((node: HTMLDivElement | null) => setLogEl(node), []);
           <ChatCircle size={18} aria-hidden="true" className="text-fg-muted" />
         )}
         <h2 className="text-sm font-semibold">{mode === "replay" ? "Replay chat" : "Live chat"}</h2>
-        {visible.length > 0 && started && (
+        {visible.length > 0 && (started || mode === "live") && (
           <span className="ml-auto font-mono text-xs text-fg-subtle">{visible.length}</span>
         )}
       </div>
 
-      {!started ? (
-        /* Waits for playback. A transcript sitting still beside a paused video is
-           out of context — a recording holds thousands of lines and none of them
-           are the moment being looked at. Once the video is running the log scrolls
-           to where the playhead is and the reader can go back from there. */
+      {!started && mode !== "live" ? (
+        /* Waits for playback — replay only. A transcript sitting still beside a
+           paused video is out of context: a recording holds thousands of lines and
+           none of them are the moment being looked at, so it waits for the playhead.
+           Live chat has no playhead to wait for — it is a rolling window of the last
+           few minutes — so it shows the moment it arrives, whether or not the visitor
+           has pressed play. Gating live on `started` was why a live stream could sit
+           on "putar videonya dulu" forever while sixty messages were already in hand. */
         <div className="flex min-h-0 flex-1 flex-col justify-center px-5 py-8 text-center">
           <Play size={22} aria-hidden="true" className="mx-auto text-fg-subtle" weight="fill" />
           <p className="mt-3 text-sm leading-relaxed text-fg-muted">
