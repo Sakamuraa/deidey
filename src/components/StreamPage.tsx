@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { Archive, ArrowSquareOut, ChatCircle, Eye, Play, Spinner } from "@phosphor-icons/react";
+import { Archive, ArrowLineDown, ArrowSquareOut, ChatCircle, Eye, Play, Spinner } from "@phosphor-icons/react";
 
 import { ActionLink } from "@/components/Action";
 import { Reveal } from "@/lib/reveal";
@@ -325,11 +325,40 @@ function ChatPanel({
     if (value) setUnread(0);
   }, []);
 
+  /*
+   * The scroll position that means "where the reader should be", which is not the
+   * same place in both modes.
+   *
+   *   live    the newest line, at the bottom
+   *   replay  the line beside the playhead, wherever that has moved to
+   *
+   * Kept in a ref and recomputed by the replay effect on every tick, so a scroll
+   * event can measure against it. A replay's "present" is not the bottom of the
+   * log: the transcript is read forward as the video plays, so the bottom is
+   * minutes ahead of where the reader is watching, and treating it as the target
+   * would mean the log jumped forward every second while they read behind it.
+   */
+  const presentRef = useRef<number | null>(null);
+
   useEffect(() => {
     const node = logRef.current;
     if (!node) return;
 
     const onScroll = () => {
+      if (mode === "replay" && presentRef.current !== null) {
+        /*
+         * Near where the playhead is, not near the bottom.
+         *
+         * A tolerance of a couple of lines rather than six pixels: in a replay the
+         * reader's hand has to travel a whole row before they have meant to leave,
+         * and six pixels is a rounding error's worth of slack, which would make the
+         * log jump under them while they were only nudging it.
+         */
+        const distance = Math.abs(node.scrollTop - presentRef.current);
+        markFollowing(distance <= 48);
+        return;
+      }
+
       const slack = node.scrollHeight - node.scrollTop - node.clientHeight;
       // Six pixels: enough to survive sub-pixel rounding at the bottom, tight
       // enough that a deliberate scroll upward stops the following straight away.
@@ -338,7 +367,7 @@ function ChatPanel({
 
     node.addEventListener("scroll", onScroll, { passive: true });
     return () => node.removeEventListener("scroll", onScroll);
-  }, [markFollowing]);
+  }, [markFollowing, mode]);
 
   /*
    * New lines arriving.
@@ -441,8 +470,44 @@ function ChatPanel({
     // Clamped, because a transcript can be shorter than the box and scrollTop
     // would otherwise be set to a negative number, which the browser ignores and
     // leaves the log pinned to the top for no reason.
-    log.scrollTop = Math.max(0, Math.min(target, log.scrollHeight - log.clientHeight));
+    const clamped = Math.max(0, Math.min(target, log.scrollHeight - log.clientHeight));
+
+    /*
+     * Recorded every tick, whether or not the reader is following.
+     *
+     * The scroll handler measures against this to decide if they have moved away,
+     * so it has to describe where the playhead *is* rather than where the log was
+     * left. Updating it unconditionally is what lets a reader who has scrolled back
+     * to be recognised as following again the moment they come back.
+     */
+    presentRef.current = clamped;
+
+    /*
+     * Only move the log if the reader has not gone looking for something.
+     *
+     * This effect runs on every tick of the playhead -- about once a second -- so
+     * setting the position unconditionally meant no one could ever scroll up. A
+     * reader who dragged back twenty lines was pulled to the playhead again before
+     * they had finished one, over and over, which read as the box being locked to
+     * the bottom and was the reason there was no way to read behind the video while
+     * it played. The jump button is the way back.
+     */
+    if (!followingRef.current) return;
+
+    log.scrollTop = clamped;
   }, [currentTime, mode, started, visible.length]);
+
+  /*
+   * Back to the playhead, for a replay. The counterpart to jumpToLatest, which
+   * goes to the newest line instead -- the right destination is not the same place
+   * in both modes, which is why there are two functions rather than one.
+   */
+  const jumpToPresent = useCallback(() => {
+    if (presentRef.current !== null) {
+      logRef.current?.scrollTo({ top: presentRef.current, behavior: "smooth" });
+      markFollowing(true);
+    }
+  }, [markFollowing]);
 
   return (
     /*
@@ -502,19 +567,22 @@ function ChatPanel({
             ref={logRef}
             className="min-h-0 flex-1 overflow-y-auto px-5 py-4"
             /*
-             * Announcements follow the scroll state, not the message count.
+             * Announcements follow the scroll state, in both modes.
              *
              * `polite` while the log is keeping itself current is right: the reader
-             * is watching it fill, and a new line is the thing they are here for.
+             * is watching it fill, and a new line is the thing they are here for --
+             * the newest message during a live stream, or the line beside the
+             * playhead during a replay.
              *
-             * `off` while they have scrolled up is the point of the whole three
-             * state arrangement. A live region announces on content change whether
-             * or not the reader can see the change -- so someone reading back through
-             * chat would have every new line announced at them while the line itself
-             * had deliberately not been moved into view. The button carries the count
-             * instead, so nothing arrives unasked and nothing is lost.
+             * `off` while they have scrolled away is the point of the whole
+             * three-state arrangement. A live region announces on content change
+             * whether or not the reader can see the change, so someone reading back
+             * through a replay would have every line announced at them while the
+             * line itself had deliberately not been moved into view. The button
+             * carries the way back instead, so nothing arrives unasked and nothing
+             * is lost.
              */
-            aria-live={following && mode === "live" ? "polite" : "off"}
+            aria-live={following ? "polite" : "off"}
           >
             <ul className="flex flex-col gap-3">
             {visible.map((m) => (
@@ -584,19 +652,40 @@ function ChatPanel({
           </div>
 
           {/*
-            The jump button. Only while a live chat has new lines the reader has
-            not scrolled down to, and only then -- its absence is what says the log
-            is keeping itself up to date. Scrolling to the bottom by hand clears it
-            just as pressing it does, so the two are not different affordances.
+            One button, two destinations.
+
+            Live: the newest line is at the bottom, so that is where it goes and the
+            count of unread lines rides along.
+
+            Replay: "the newest line" is not the right answer at all -- the
+            transcript runs ahead of the video, so the bottom is minutes past where
+            the reader is watching. There the destination is the playhead, and there
+            is nothing to count: the reader did not miss messages, they moved away
+            from a position, so the button says where it takes them rather than how
+            much they missed.
+
+            It appears whenever the reader is not already there. A replay used to
+            have no button at all, because the playhead effect held the log there
+            whether they wanted it or not.
           */}
-          {unread > 0 && (
+          {((mode === "live" && unread > 0) || (mode === "replay" && !following)) && (
             <button
               type="button"
-              onClick={jumpToLatest}
+              onClick={mode === "live" ? jumpToLatest : jumpToPresent}
               className="absolute inset-x-0 bottom-3 mx-auto w-fit rounded-full border border-line-strong bg-surface px-3.5 py-1.5 text-xs font-medium text-fg shadow-sm transition-colors hover:bg-surface-raised focus-visible:outline-2 focus-visible:outline-offset-2"
             >
-              ↓ {unread} baru
-              <span className="sr-only"> — ke pesan terbaru</span>
+              {mode === "live" ? (
+                <>
+                  ↓ {unread} baru
+                  <span className="sr-only"> — ke pesan terbaru</span>
+                </>
+              ) : (
+                <>
+                  <ArrowLineDown size={13} weight="bold" aria-hidden="true" className="mr-1 inline" />
+                  Ke posisi video
+                  <span className="sr-only"> — kembali ke chat di detik yang sedang ditonton</span>
+                </>
+              )}
             </button>
           )}
         </div>
