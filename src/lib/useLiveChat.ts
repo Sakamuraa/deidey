@@ -74,37 +74,24 @@ type State = {
 /*
  * How long to wait between live polls.
  *
- * This used to be a flat fifteen seconds while the comment claimed the endpoint
- * advertised its own. It did send the figure -- `timeoutMs`, the deadline YouTube
- * puts on the continuation, which is its own knowledge of when the next message can
- * exist -- and the client threw it away. Fifteen seconds against a stream where
- * messages arrive every few is why chat looked stuck.
- *
- * The endpoint's number is used instead, bounded on both sides. The floor stops a
- * broadcast that keeps saying "come back in one second" from becoming a request
- * per second, which is a billed serverless call each time and is also not how
- * often chat actually moves. The ceiling covers an endpoint that reports no
- * deadline at all, which is the case for a quiet stream. Without the ceiling a
- * missing value would mean never asking again.
+ * YouTube hands back `timeoutMs`, its own deadline on the continuation. On an
+ * active stream that is often ~10s, which is far slower than chat actually moves
+ * -- new lines then showed up about ten seconds after they did on YouTube. So the
+ * deadline is clamped rather than taken as-is: capped above so live chat stays
+ * within a few seconds of the real thing, and floored below so a stream that keeps
+ * saying "come back in one second" does not become a request per second (each poll
+ * is a billed serverless call). Polling is paused while the tab is hidden, so an
+ * idle viewer costs nothing regardless.
  */
-const POLL_FLOOR_MS = 3_000;
-const POLL_CEIL_MS = 12_000;
+const POLL_MIN_MS = 2_000;
+const POLL_MAX_MS = 4_000;
 
-/** Used when the endpoint gives no deadline, or one outside the bounds. */
-const POLL_DEFAULT_MS = 6_000;
+/** Used when the endpoint gives no usable deadline. */
+const POLL_DEFAULT_MS = 3_000;
 
-/**
- * The wait before the next poll, from the deadline the last response carried.
- *
- * A value that is not a positive number, or one that lands outside the bounds, is
- * replaced rather than clamped. Clamping a three hour deadline to twelve seconds
- * would turn a stream that is genuinely quiet into a poll a second forever, which
- * is the failure the ceiling exists to prevent.
- */
 function nextPollDelay(timeoutMs: number | null | undefined): number {
   if (typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs)) return POLL_DEFAULT_MS;
-  if (timeoutMs < POLL_FLOOR_MS || timeoutMs > POLL_CEIL_MS) return POLL_DEFAULT_MS;
-  return timeoutMs;
+  return Math.min(POLL_MAX_MS, Math.max(POLL_MIN_MS, timeoutMs));
 }
 
 /** Stop after this many consecutive failures rather than hammering a dead stream. */

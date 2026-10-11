@@ -901,12 +901,14 @@ export default async function handler(req: ChatRequest, res: ChatResponse) {
       return;
     }
 
-    // A running stream changes every few seconds, so the window must stay short.
-    // A replay page never changes once recorded, and can be cached hard.
+    // A running stream changes every second or two, so the edge window must be
+    // short -- an 8s window served new chat stale and up to ~20s late through
+    // stale-while-revalidate. A replay page never changes once recorded, and can
+    // be cached hard.
     res.setHeader(
       "Cache-Control",
       result.mode === "live"
-        ? "public, s-maxage=8, stale-while-revalidate=20"
+        ? "public, s-maxage=2, stale-while-revalidate=4"
         : "public, s-maxage=300, stale-while-revalidate=3600",
     );
 
