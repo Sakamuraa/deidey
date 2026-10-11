@@ -280,6 +280,8 @@ interface ContentItem {
   channel?: string;
   /** Scheduled but not started. Separate from live: one is now, one is later. */
   upcoming?: boolean;
+  /** Scheduled start as unix seconds, when known; drives the countdown. */
+  scheduledStart?: number | null;
 }
 
 interface LockupEntry {
@@ -288,6 +290,8 @@ interface LockupEntry {
   live: boolean;
   /** Scheduled but not started, read from the thumbnail badge. */
   upcoming: boolean;
+  /** Scheduled start as unix seconds, when the grid carries it; else null. */
+  scheduledStart: number | null;
   viewers: number | null;
   age: string | null;
   ageSeconds: number | null;
@@ -380,6 +384,17 @@ function parseLockups(html: string): LockupEntry[] {
     const age = ageLine ? parseAge(ageLine) : null;
     const sources = thumbnail?.image?.sources ?? [];
 
+    // Scheduled start, when YouTube carries it in this lockup. The grid for a
+    // scheduled broadcast embeds a unix `startTime`; the watch page would not
+    // survive the datacenter IP, but this channel grid does. Read off the raw
+    // node (10-13 digits -> normalise to seconds); null when not present.
+    const startMatch = JSON.stringify(lockup).match(/"startTime":"(\d{10,13})"/);
+    const scheduledStart = startMatch
+      ? Number(startMatch[1]) > 1e12
+        ? Math.floor(Number(startMatch[1]) / 1000)
+        : Number(startMatch[1])
+      : null;
+
     entries.push({
       videoId,
       title: stripLiveMarker(title),
@@ -392,6 +407,7 @@ function parseLockups(html: string): LockupEntry[] {
       // tested separately rather than inferred from `live` being false -- an
       // ordinary finished broadcast also has live=false.
       upcoming: UPCOMING_BADGE.test(JSON.stringify(overlays ?? "")),
+      scheduledStart,
       viewers: viewerLine ? parseViewerCount(viewerLine) : null,
       age,
       ageSeconds: ageToSeconds(age),
@@ -431,6 +447,7 @@ function toItem(entry: LockupEntry, live: boolean): ContentItem {
     age: entry.age,
     publishedAt: publishedAtOf(entry),
     duration: null,
+    scheduledStart: entry.scheduledStart,
   };
 }
 

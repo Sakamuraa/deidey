@@ -25,6 +25,8 @@ export type ContentItem = {
   channel?: string;
   /** Scheduled but not started. Separate from live: one is now, one is later. */
   upcoming?: boolean;
+  /** Scheduled start as unix seconds, for the countdown. Null when unknown. */
+  scheduledStart?: number | null;
 };
 
 type ApiPayload = {
