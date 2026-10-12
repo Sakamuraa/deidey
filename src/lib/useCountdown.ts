@@ -21,15 +21,15 @@ export function useCountdown(targetUnixSeconds: number | null | undefined): numb
   return targetUnixSeconds * 1000 - now;
 }
 
-/** "3 hari 4 jam" / "3 jam 12 menit" / "12 menit 5 detik" / "45 detik". */
+/** "3 hari 4 jam 12 menit 5 detik" down to "45 detik" — always to the second. */
 export function formatCountdown(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000));
   const d = Math.floor(total / 86400);
   const h = Math.floor((total % 86400) / 3600);
   const m = Math.floor((total % 3600) / 60);
   const s = total % 60;
-  if (d > 0) return `${d} hari ${h} jam`;
-  if (h > 0) return `${h} jam ${m} menit`;
+  if (d > 0) return `${d} hari ${h} jam ${m} menit ${s} detik`;
+  if (h > 0) return `${h} jam ${m} menit ${s} detik`;
   if (m > 0) return `${m} menit ${s} detik`;
   return `${s} detik`;
 }
