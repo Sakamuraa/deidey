@@ -38,6 +38,7 @@ const supported = () =>
  */
 export function NotifyButton() {
   const [status, setStatus] = useState<Status>("idle");
+  const [detail, setDetail] = useState("");
 
   useEffect(() => {
     if (!supported()) {
@@ -54,6 +55,7 @@ export function NotifyButton() {
   const toggle = useCallback(async () => {
     if (!supported()) return;
     setStatus("working");
+    setDetail("");
     try {
       const reg = await navigator.serviceWorker.register("/sw.js");
       const existing = await reg.pushManager.getSubscription();
@@ -89,11 +91,26 @@ export function NotifyButton() {
         setStatus("on");
       } else {
         // Roll back the browser subscription so a retry starts clean.
+        const why = await res.text().catch(() => "");
         await sub.unsubscribe().catch(() => {});
+        console.error("[notify] portal menolak langganan:", res.status, why);
         setStatus("error");
+        setDetail(`Server menolak langganan (HTTP ${res.status}).`);
       }
-    } catch {
+    } catch (err) {
+      // On desktop this is almost always a browser/OS push block (Brave with
+      // Google push disabled, Windows notifications off) rather than our
+      // backend — the backend path is proven working from mobile. Surface it.
+      console.error("[notify] gagal berlangganan push:", err);
+      const name = (err as { name?: string } | undefined)?.name;
       setStatus("error");
+      setDetail(
+        name === "AbortError"
+          ? 'Browser/OS memblokir push. Di Brave: aktifkan "Use Google services for push messaging"; di Windows: nyalakan Notifikasi untuk browser ini.'
+          : name === "NotAllowedError"
+            ? "Izin notifikasi ditolak browser."
+            : (err as { message?: string } | undefined)?.message || "Gagal, coba lagi.",
+      );
     }
   }, []);
 
@@ -112,22 +129,27 @@ export function NotifyButton() {
             : "Ingatkan saat live";
 
   return (
-    <button
-      type="button"
-      onClick={toggle}
-      disabled={status === "working" || status === "denied"}
-      aria-pressed={on}
-      title={status === "denied" ? "Izin notifikasi diblokir di browser" : label}
-      className="inline-flex items-center gap-2 rounded-pill border border-line px-3.5 py-2 text-sm font-medium text-fg transition-colors hover:bg-surface-raised disabled:opacity-60"
-    >
-      {status === "working" ? (
-        <Spinner size={16} aria-hidden="true" className="animate-spin" />
-      ) : on ? (
-        <Bell size={16} weight="fill" aria-hidden="true" className="text-glow" />
-      ) : (
-        <BellSlash size={16} aria-hidden="true" />
-      )}
-      <span>{label}</span>
-    </button>
+    <div className="flex flex-col items-center gap-1">
+      <button
+        type="button"
+        onClick={toggle}
+        disabled={status === "working" || status === "denied"}
+        aria-pressed={on}
+        title={status === "denied" ? "Izin notifikasi diblokir di browser" : detail || label}
+        className="inline-flex items-center gap-2 rounded-pill border border-line px-3.5 py-2 text-sm font-medium text-fg transition-colors hover:bg-surface-raised disabled:opacity-60"
+      >
+        {status === "working" ? (
+          <Spinner size={16} aria-hidden="true" className="animate-spin" />
+        ) : on ? (
+          <Bell size={16} weight="fill" aria-hidden="true" className="text-glow" />
+        ) : (
+          <BellSlash size={16} aria-hidden="true" />
+        )}
+        <span>{label}</span>
+      </button>
+      {status === "error" && detail ? (
+        <p className="max-w-[20rem] text-center text-xs opacity-70">{detail}</p>
+      ) : null}
+    </div>
   );
 }
