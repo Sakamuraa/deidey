@@ -85,7 +85,13 @@ export function NotifyButton() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ subscription: sub.toJSON(), slug: SITE_SLUG }),
       });
-      setStatus(res.ok ? "on" : "error");
+      if (res.ok) {
+        setStatus("on");
+      } else {
+        // Roll back the browser subscription so a retry starts clean.
+        await sub.unsubscribe().catch(() => {});
+        setStatus("error");
+      }
     } catch {
       setStatus("error");
     }
