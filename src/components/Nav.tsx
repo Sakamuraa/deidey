@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "re
 
 import { ActionLink } from "@/components/Action";
 import { XMark, YoutubeMark } from "@/components/ChannelIcons";
+import { NotifyButton } from "@/components/NotifyButton";
 import { channels, navigation, site, type Route } from "@/content/site";
 import { asset } from "@/lib/paths";
 import { useTheme } from "@/lib/useTheme";
@@ -191,6 +192,7 @@ export function Nav({
           </nav>
 
           <div className="flex items-center gap-2">
+            <NotifyButton />
             <ThemeToggle />
 
             {/*
