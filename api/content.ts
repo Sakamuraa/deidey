@@ -473,21 +473,51 @@ function toItem(entry: LockupEntry, live: boolean): ContentItem {
 
 /** Newest broadcasts, live state included. */
 /**
+ * How far ahead an upcoming show is still worth a card: seven days, inclusive.
+ *
+ * A schedule set further out than this is real but not yet worth a "Mendatang"
+ * slot -- the visitor cannot act on a date two weeks out the way they can on
+ * one next week. Measured against the grid: scheduled items sort to the top
+ * with the nearest first, so after this filter the soonest remaining is the
+ * one that belongs on the page.
+ */
+const UPCOMING_WINDOW_SEC = 7 * 24 * 60 * 60;
+
+/**
  * The channel's own scheduled broadcast, if it has one.
  *
  * Read off the same /streams response as the finished broadcasts, so it costs
  * nothing extra.
  */
 function pickUpcoming(html: string): ContentItem | null {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const candidates: LockupEntry[] = [];
   for (const entry of parseLockups(html)) {
     if (!entry.upcoming) continue;
     // A scheduled item has no age -- it has not happened yet. If the row carries
     // one anyway, this badge matched on something other than a schedule, and
     // guessing at a future from it would be worse than showing nothing.
     if (entry.age) continue;
-    return { ...toItem(entry, false), upcoming: true };
+    // A show more than seven days out is not worth a card yet. An unknown
+    // start (null) is kept: the badge alone is still a real schedule signal,
+    // and PREF=tz only fails to pin the label when the grid omits it entirely.
+    if (
+      entry.scheduledStart != null &&
+      entry.scheduledStart > nowSec + UPCOMING_WINDOW_SEC
+    ) {
+      continue;
+    }
+    candidates.push(entry);
   }
-  return null;
+  if (candidates.length === 0) return null;
+  // Soonest known start first. Entries with no pinned time sort behind those
+  // that do, so a dated show always wins over an undated one.
+  candidates.sort(
+    (a, b) =>
+      (a.scheduledStart ?? Number.POSITIVE_INFINITY) -
+      (b.scheduledStart ?? Number.POSITIVE_INFINITY),
+  );
+  return { ...toItem(candidates[0], false), upcoming: true };
 }
 
 /**
